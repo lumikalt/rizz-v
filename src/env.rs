@@ -1,11 +1,14 @@
 use std::collections::HashMap;
 
+use crate::{err::RuntimeErr, parser::{Loc, Token}};
+
 #[derive(Debug)]
 pub struct Env {
     pub register_alias: HashMap<String, usize>,
     labels: HashMap<String, usize>,
     registers: [i64; 32],
     pub stack: Vec<i64>, // TODO: Find the size of the stack
+    pub instructions: Vec<u32>,
 }
 
 impl Env {
@@ -54,6 +57,7 @@ impl Env {
             labels: HashMap::new(),
             registers: [0; 32],
             stack: Vec::new(),
+            instructions: Vec::new(),
         }
     }
 
@@ -81,7 +85,9 @@ impl Env {
         }
     }
     pub fn is_valid_register(&self, reg: &str) -> bool {
-        self.alias_to_register(reg).or_else(|| self.xn_to_register(reg)).is_some()
+        self.alias_to_register(reg)
+            .or_else(|| self.xn_to_register(reg))
+            .is_some()
     }
 
     pub fn add_label(&mut self, label: &str, value: usize) {
@@ -90,5 +96,14 @@ impl Env {
 
     pub fn get_label(&self, label: &str) -> Option<usize> {
         self.labels.get(label).copied()
+    }
+
+    pub fn to_instruction(&self, tokens: Vec<(Token, Loc)>) -> Result<u32, RuntimeErr> {
+        let (op, args) = match &tokens[0].0 {
+            Token::Op(op, args) => (op, args),
+            _ => unreachable!(),
+        };
+
+        todo!()
     }
 }
