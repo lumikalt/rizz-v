@@ -5,7 +5,7 @@ pub struct Env {
     pub register_alias: HashMap<String, usize>,
     labels: HashMap<String, usize>,
     registers: [i64; 32],
-    stack: Vec<i64>, // TODO: Find the size of the stack
+    pub stack: Vec<i64>, // TODO: Find the size of the stack
 }
 
 impl Env {
@@ -69,11 +69,19 @@ impl Env {
         self.register_alias.get(reg).copied()
     }
     pub fn xn_to_register(&self, reg: &str) -> Option<usize> {
-        if reg.starts_with("x") {
-            reg[1..].parse::<usize>().ok()
+        if reg == "x0" {
+            Some(0)
+        } else if reg.starts_with("x") && !reg[1..].starts_with("0") {
+            match reg[1..].parse::<usize>() {
+                Ok(n) if n < 32 => Some(n),
+                _ => None,
+            }
         } else {
             None
         }
+    }
+    pub fn is_valid_register(&self, reg: &str) -> bool {
+        self.alias_to_register(reg).or_else(|| self.xn_to_register(reg)).is_some()
     }
 
     pub fn add_label(&mut self, label: &str, value: usize) {

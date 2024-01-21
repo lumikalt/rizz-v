@@ -30,7 +30,7 @@ impl SyntaxErr {
             SyntaxErr::UnmatchedParen(true) => "add '(' before the register name".to_string(),
             SyntaxErr::UnexpectedChar => "ensure the input is well-formed".to_string(),
             SyntaxErr::OutsideOp(kind) => format!("add '{}'s only after an opcode", kind),
-            SyntaxErr::MemoryInvalidRegister => "valid registers are of the form xN, 0 <= N < 32, or the standard aliases".to_string(),
+            SyntaxErr::MemoryInvalidRegister => "registers are either xN (N < 32 with no leading 0) or the standard aliases".to_string(),
         }
     }
 }

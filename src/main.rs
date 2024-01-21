@@ -1,5 +1,5 @@
 use codespan_reporting::{
-    diagnostic::{self, Diagnostic, Label},
+    diagnostic::{Diagnostic, Label},
     files::SimpleFile,
     term::{
         self,
@@ -25,7 +25,7 @@ fn main() -> anyhow::Result<()> {
         Err(errs) => {
             for err in errs {
                 let start = err.1.start;
-                let end = err.1.end;
+                let end = err.1.end + 1;
 
                 let diagnostic = Diagnostic::error()
                     .with_message("Syntax Error")

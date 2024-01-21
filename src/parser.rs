@@ -53,7 +53,6 @@ type ParseErr = (SyntaxErr, Loc, Vec<(Token, Loc)>, Option<String>);
 #[derive(Debug, Clone, Copy)]
 pub struct Loc {
     pub line: usize,
-    pub col: usize,
     pub start: usize,
     pub end: usize,
 }
@@ -61,7 +60,6 @@ pub struct Loc {
 fn parse_line(env: &Env, input: &str, line: usize) -> Result<Vec<(Token, Loc)>, ParseErr> {
     let mut loc = Loc {
         line,
-        col: 1,
         start: 0,
         end: 0,
     };
@@ -73,12 +71,7 @@ fn parse_line(env: &Env, input: &str, line: usize) -> Result<Vec<(Token, Loc)>, 
 
     while let Some(c) = chars.next() {
         let token = match c {
-            '\t' => {
-                // TODO: Make a flag to set the tab size
-                loc.col += 3;
-                Spacing
-            }
-            ' ' => Spacing,
+            '\t' | ' ' => Spacing,
 
             '#' => {
                 while let Some(_) = chars.peek() {
@@ -94,7 +87,20 @@ fn parse_line(env: &Env, input: &str, line: usize) -> Result<Vec<(Token, Loc)>, 
                     num.push(chars.next().unwrap());
                     loc.end += 1;
                 }
-                Immediate(num.parse().unwrap())
+                if let Some('(') | Some(' ') = chars.peek() {
+                    Immediate(num.parse().unwrap())
+                } else {
+                    return Err((
+                        SyntaxErr::UnexpectedChar,
+                        Loc {
+                            line,
+                            start: loc.end + 1,
+                            end: loc.end + 1,
+                        },
+                        tokens.clone(),
+                        None,
+                    ));
+                }
             }
             '-' => {
                 let mut num = c.to_string();
@@ -104,14 +110,12 @@ fn parse_line(env: &Env, input: &str, line: usize) -> Result<Vec<(Token, Loc)>, 
                 Immediate(num.parse().unwrap())
             }
             '(' => {
-                let start = loc.start + 1;
-                let col = loc.col + 1;
+                let start = loc.start + 2;
 
                 let imm;
                 if let Some((Immediate(_), _)) = tokens.last() {
                     imm = Box::new(tokens.pop().unwrap());
                     loc.start = imm.1.start;
-                    loc.col = imm.1.col;
                 } else {
                     return Err((
                         SyntaxErr::UnexpectedChar,
@@ -131,15 +135,10 @@ fn parse_line(env: &Env, input: &str, line: usize) -> Result<Vec<(Token, Loc)>, 
                 let end = loc.end + 1;
 
                 let reg = reg.trim();
-                if env.alias_to_register(reg).is_none() && env.xn_to_register(reg).is_none() {
+                if !env.is_valid_register(reg) {
                     return Err((
                         SyntaxErr::MemoryInvalidRegister,
-                        Loc {
-                            line,
-                            col,
-                            start,
-                            end,
-                        },
+                        Loc { line, start, end },
                         tokens.clone(),
                         None,
                     ));
@@ -170,9 +169,8 @@ fn parse_line(env: &Env, input: &str, line: usize) -> Result<Vec<(Token, Loc)>, 
 
             // Opcode or Label definition
             'a'..='z' | 'A'..='Z' | '_' => {
-                dbg!("op");
                 let mut str = c.to_string();
-                while let Some('a'..='z') | Some('A'..='Z') | Some('_') | Some('0'..='9') =
+                while let Some('a'..='z') | Some('A'..='Z') | Some('_') | Some('0'..='9') | Some('.') =
                     chars.peek()
                 {
                     str.push(chars.next().unwrap());
@@ -185,8 +183,24 @@ fn parse_line(env: &Env, input: &str, line: usize) -> Result<Vec<(Token, Loc)>, 
                 } else if let Some((Op(_, _), _)) = tokens.get(tokens.len() - 2) {
                     // These Registers may actually be label references or symbols, but there's ambiguity
                     // between them and registers, so we'll just assume they're registers for now
-                    Register(str)
+                    Register(str.trim().to_owned())
                 } else {
+                    if env.is_valid_register(&str) {
+                        return Err((
+                            SyntaxErr::OutsideOp("register".to_string()),
+                            loc.clone(),
+                            tokens.clone(),
+                            None,
+                        ));
+                    }
+                    if str.trim().contains(|c: char| !c.is_alphabetic() && c != '.') {
+                        return Err((
+                            SyntaxErr::UnexpectedChar,
+                            dbg!(loc.clone()),
+                            tokens.clone(),
+                            Some("opcodes must only contain ascii letters".to_string()),
+                        ));
+                    }
                     Op(str, vec![])
                 }
             }
@@ -194,8 +208,6 @@ fn parse_line(env: &Env, input: &str, line: usize) -> Result<Vec<(Token, Loc)>, 
         };
         tokens.push((token, loc.clone()));
         loc.end += 1;
-        loc.col += loc.end - loc.start;
-        loc.col;
         loc.start = loc.end;
     }
 
@@ -213,7 +225,7 @@ fn parse_line(env: &Env, input: &str, line: usize) -> Result<Vec<(Token, Loc)>, 
             let (is_op, group) = group;
             if is_op {
                 let group = group.collect::<Vec<_>>();
-                let (op, loc) = dbg!(dbg!(group[0].clone()));
+                let (op, loc) = group[0].clone();
                 let (op, mut args) = match op {
                     Op(op, args) => (op, args),
                     // because any register/symbol/label def is interpreted as an Op by default, this only
@@ -251,7 +263,7 @@ fn parse_line(env: &Env, input: &str, line: usize) -> Result<Vec<(Token, Loc)>, 
 ///
 /// Returns a vector of tokens and their locations, if successful, or an error vector
 /// containing the error, the location of the error, the tokens parsed up to that point,
-/// and an optional message to display to the users
+/// and an optional message to display to the users for each line with an error
 pub fn parse(env: &Env, input: &str) -> Result<Vec<(Token, Loc)>, Vec<ParseErr>> {
     let parsed_lines = input
         .lines()
@@ -268,7 +280,6 @@ pub fn parse(env: &Env, input: &str) -> Result<Vec<(Token, Loc)>, Vec<ParseErr>>
     if err.is_empty() {
         Ok(ok.into_par_iter().flat_map(|line| line.unwrap()).collect())
     } else {
-        dbg!("err");
         Err(err.into_par_iter().map(|line| line.unwrap_err()).collect())
     }
 }
