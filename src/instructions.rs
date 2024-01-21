@@ -26,7 +26,8 @@ pub mod kind {
     }
 
     pub struct I {
-        pub imm: [bool; 12], // 11:0
+        /// 11:0
+        pub imm: [bool; 12],
         pub ra: [bool; 5],
         pub funct3: [bool; 3],
         pub rd: [bool; 5],
@@ -35,7 +36,8 @@ pub mod kind {
 
     pub struct I2 {
         pub funct6: [bool; 6],
-        pub imm: [bool; 6], // 5:0
+        /// 5:0
+        pub imm: [bool; 6],
         pub ra: [bool; 5],
         pub funct3: [bool; 3],
         pub rd: [bool; 5],
@@ -43,31 +45,37 @@ pub mod kind {
     }
 
     pub struct S {
-        pub imm: [bool; 7], // 11:5
+        /// 11:5
+        pub imm: [bool; 7],
         pub rb: [bool; 5],
         pub ra: [bool; 5],
         pub funct3: [bool; 3],
-        pub imm2: [bool; 5], // 4:0
+        /// 4:0
+        pub imm2: [bool; 5],
         pub opcode: [bool; 7],
     }
 
     pub struct B {
-        pub imm: [bool; 7], // 12 | 10:5
+        /// 12 | 10:5
+        pub imm: [bool; 7],
         pub rb: [bool; 5],
         pub ra: [bool; 5],
         pub funct3: [bool; 3],
-        pub imm2: [bool; 5], // 4:1 | 11
+        /// 4:1 | 11
+        pub imm2: [bool; 5],
         pub opcode: [bool; 7],
     }
 
     pub struct U {
-        pub imm: [bool; 20], // 31:12
+        /// 31:12
+        pub imm: [bool; 20],
         pub rd: [bool; 5],
         pub opcode: [bool; 7],
     }
 
     pub struct J {
-        pub imm: [bool; 20], // 20 | 10:1 | 11 | 19:12
+        /// 20 | 10:1 | 11 | 19:12
+        pub imm: [bool; 20],
         pub rd: [bool; 5],
         pub opcode: [bool; 7],
     }
@@ -111,12 +119,12 @@ pub mod kind {
             write!(
                 f,
                 "{:07b}{:05b}{:05b}{:03b}{:05b}{:07b}",
-                to_u32(&self.opcode),
-                to_u32(&self.rd),
-                to_u32(&self.funct3),
-                to_u32(&self.ra),
-                to_u32(&self.rb),
                 to_u32(&self.funct7),
+                to_u32(&self.rb),
+                to_u32(&self.ra),
+                to_u32(&self.funct3),
+                to_u32(&self.rd),
+                to_u32(&self.opcode),
             )
         }
     }
@@ -124,15 +132,14 @@ pub mod kind {
         fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
             write!(
                 f,
-                "{:07b}{:05b}{:05b}{:03b}{:05b}{:02b}{:05b}{:07b}",
-                to_u32(&self.opcode),
-                to_u32(&self.rd),
-                to_u32(&self.funct3),
-                to_u32(&self.ra),
-                to_u32(&self.rb),
-                to_u32(&self.funct2),
+                "{:05b}{:02b}{:05b}{:05b}{:03b}{:05b}{:07b}",
                 to_u32(&self.rc),
-                to_u32(&[false; 7]),
+                to_u32(&self.funct2),
+                to_u32(&self.rb),
+                to_u32(&self.ra),
+                to_u32(&self.funct3),
+                to_u32(&self.rd),
+                to_u32(&self.opcode),
             )
         }
     }
@@ -140,12 +147,12 @@ pub mod kind {
         fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
             write!(
                 f,
-                "{:07b}{:05b}{:03b}{:05b}{:012b}",
-                to_u32(&self.opcode),
-                to_u32(&self.rd),
-                to_u32(&self.funct3),
-                to_u32(&self.ra),
+                "{:012b}{:05b}{:03b}{:05b}{:07b}",
                 to_u32(&self.imm),
+                to_u32(&self.ra),
+                to_u32(&self.funct3),
+                to_u32(&self.rd),
+                to_u32(&self.opcode),
             )
         }
     }
@@ -153,13 +160,13 @@ pub mod kind {
         fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
             write!(
                 f,
-                "{:07b}{:05b}{:03b}{:05b}{:05b}{:06b}",
-                to_u32(&self.opcode),
-                to_u32(&self.rd),
-                to_u32(&self.funct3),
-                to_u32(&self.ra),
-                to_u32(&self.imm),
+                "{:06b}{:06b}{:05b}{:03b}{:05b}{:07b}",
                 to_u32(&self.funct6),
+                to_u32(&self.imm),
+                to_u32(&self.ra),
+                to_u32(&self.funct3),
+                to_u32(&self.rd),
+                to_u32(&self.opcode),
             )
         }
     }
@@ -167,13 +174,13 @@ pub mod kind {
         fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
             write!(
                 f,
-                "{:07b}{:05b}{:03b}{:05b}{:07b}{:05b}",
-                to_u32(&self.opcode),
-                to_u32(&self.imm2),
-                to_u32(&self.funct3),
-                to_u32(&self.ra),
-                to_u32(&self.rb),
+                "{:07b}{:05b}{:05b}{:03b}{:05b}{:07b}",
                 to_u32(&self.imm),
+                to_u32(&self.rb),
+                to_u32(&self.ra),
+                to_u32(&self.funct3),
+                to_u32(&self.imm2),
+                to_u32(&self.opcode),
             )
         }
     }
@@ -181,13 +188,13 @@ pub mod kind {
         fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
             write!(
                 f,
-                "{:07b}{:05b}{:03b}{:05b}{:07b}{:05b}",
-                to_u32(&self.opcode),
-                to_u32(&self.imm2),
-                to_u32(&self.funct3),
-                to_u32(&self.ra),
-                to_u32(&self.rb),
+                "{:07b}{:05b}{:05b}{:03b}{:05b}{:07b}",
                 to_u32(&self.imm),
+                to_u32(&self.rb),
+                to_u32(&self.ra),
+                to_u32(&self.funct3),
+                to_u32(&self.imm2),
+                to_u32(&self.opcode),
             )
         }
     }
@@ -195,10 +202,10 @@ pub mod kind {
         fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
             write!(
                 f,
-                "{:07b}{:05b}{:020b}",
-                to_u32(&self.opcode),
-                to_u32(&self.rd),
+                "{:020b}{:05b}{:07b}",
                 to_u32(&self.imm),
+                to_u32(&self.rd),
+                to_u32(&self.opcode),
             )
         }
     }
@@ -206,10 +213,10 @@ pub mod kind {
         fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
             write!(
                 f,
-                "{:07b}{:05b}{:020b}",
-                to_u32(&self.opcode),
-                to_u32(&self.rd),
+                "{:020b}{:05b}{:07b}",
                 to_u32(&self.imm),
+                to_u32(&self.rd),
+                to_u32(&self.opcode),
             )
         }
     }
@@ -266,10 +273,6 @@ pub fn instruction(op: &str) -> (Kind, Vec<Value>) {
 
 /// Order: rd, ra, rb, rc
 pub fn with_reg_args((kind, args): (Kind, Vec<Value>), regs: Vec<u32>) -> (Kind, Vec<Value>) {
-    let arity = args.len();
-    // The engine will have already checked that the arity is correct
-    debug_assert!(arity == regs.len());
-
     match kind {
         Kind::Pseudo(_) => (kind, args),
         Kind::R(r) => (
@@ -350,6 +353,110 @@ pub fn with_reg_args((kind, args): (Kind, Vec<Value>), regs: Vec<u32>) -> (Kind,
             Kind::J(J {
                 imm: j.imm,
                 rd: to_bits(regs[0]),
+                opcode: j.opcode,
+            }),
+            args,
+        ),
+    }
+}
+
+pub fn with_imm((kind, args): (Kind, Vec<Value>), imm: u32) -> (Kind, Vec<Value>) {
+    match kind {
+        Kind::Pseudo(_) => (kind, args),
+        Kind::R(r) => (Kind::R(r), args),
+        Kind::R4(r4) => (Kind::R4(r4), args),
+        Kind::I(i) => (
+            Kind::I(I {
+                imm: to_bits(imm),
+                ra: i.ra,
+                funct3: i.funct3,
+                rd: i.rd,
+                opcode: i.opcode,
+            }),
+            args,
+        ),
+        Kind::I2(i2) => (
+            Kind::I2(I2 {
+                funct6: i2.funct6,
+                imm: to_bits(imm),
+                ra: i2.ra,
+                funct3: i2.funct3,
+                rd: i2.rd,
+                opcode: i2.opcode,
+            }),
+            args,
+        ),
+        Kind::S(s) => {
+            let bits = to_bits::<32>(imm);
+            (
+                Kind::S(S {
+                    imm: {
+                        let mut imm = [false; 7];
+                        imm.copy_from_slice(&bits[11..=5]);
+                        imm
+                    },
+                    rb: s.rb,
+                    ra: s.ra,
+                    funct3: s.funct3,
+                    imm2: {
+                        let mut imm2 = [false; 5];
+                        imm2.copy_from_slice(&bits[4..=0]);
+                        imm2
+                    },
+                    opcode: s.opcode,
+                }),
+                args,
+            )
+        }
+        Kind::B(b) => {
+            let bits = to_bits::<32>(imm);
+            (
+                Kind::B(B {
+                    imm: {
+                        let mut imm = [false; 7];
+                        imm[6] = bits[12];
+                        imm[5..=0].copy_from_slice(&bits[10..=5]);
+                        imm
+                    },
+                    rb: b.rb,
+                    ra: b.ra,
+                    funct3: b.funct3,
+                    imm2: {
+                        let mut imm2 = [false; 5];
+                        imm2[4..=1].copy_from_slice(&bits[4..=1]);
+                        imm2[0] = bits[11];
+                        imm2
+                    },
+                    opcode: b.opcode,
+                }),
+                args,
+            )
+        }
+        Kind::U(u) => (
+            Kind::U(U {
+                imm: {
+                    let bits = to_bits::<32>(imm);
+                    let mut imm = [false; 20];
+                    imm.copy_from_slice(&bits[31..=12]);
+                    imm
+                },
+                rd: u.rd,
+                opcode: u.opcode,
+            }),
+            args,
+        ),
+        Kind::J(j) => (
+            Kind::J(J {
+                imm: {
+                    let bits = to_bits::<32>(imm);
+                    let mut imm = [false; 20];
+                    imm[19] = bits[20];
+                    imm[18..=9].copy_from_slice(&bits[10..=1]);
+                    imm[8] = bits[11];
+                    imm[7..=0].copy_from_slice(&bits[19..=12]);
+                    imm
+                },
+                rd: j.rd,
                 opcode: j.opcode,
             }),
             args,

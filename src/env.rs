@@ -4,8 +4,8 @@ use crate::{err::RuntimeErr, parser::{Loc, Token}};
 
 #[derive(Debug)]
 pub struct Env {
-    pub register_alias: HashMap<String, usize>,
-    labels: HashMap<String, usize>,
+    pub register_alias: HashMap<String, u32>,
+    labels: HashMap<String, u32>,
     registers: [i64; 32],
     pub stack: Vec<i64>, // TODO: Find the size of the stack
     pub instructions: Vec<u32>,
@@ -61,22 +61,22 @@ impl Env {
         }
     }
 
-    pub fn set_register(&mut self, reg: usize, value: i64) {
-        self.registers[reg] = value;
+    pub fn set_register(&mut self, reg: u32, value: i64) {
+        self.registers[reg as usize] = value;
     }
 
-    pub fn get_register(&self, reg: usize) -> i64 {
-        self.registers[reg]
+    pub fn get_register(&self, reg: u32) -> i64 {
+        self.registers[reg as usize]
     }
 
-    pub fn alias_to_register(&self, reg: &str) -> Option<usize> {
+    pub fn alias_to_register(&self, reg: &str) -> Option<u32> {
         self.register_alias.get(reg).copied()
     }
-    pub fn xn_to_register(&self, reg: &str) -> Option<usize> {
+    pub fn xn_to_register(&self, reg: &str) -> Option<u32> {
         if reg == "x0" {
             Some(0)
         } else if reg.starts_with("x") && !reg[1..].starts_with("0") {
-            match reg[1..].parse::<usize>() {
+            match reg[1..].parse::<u32>() {
                 Ok(n) if n < 32 => Some(n),
                 _ => None,
             }
@@ -90,11 +90,11 @@ impl Env {
             .is_some()
     }
 
-    pub fn add_label(&mut self, label: &str, value: usize) {
+    pub fn add_label(&mut self, label: &str, value: u32) {
         self.labels.insert(label.to_string(), value);
     }
 
-    pub fn get_label(&self, label: &str) -> Option<usize> {
+    pub fn get_label(&self, label: &str) -> Option<u32> {
         self.labels.get(label).copied()
     }
 
