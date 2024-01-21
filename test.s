@@ -1,1 +1,1 @@
-    add r1 r2 r1
+a:  lw a0 1(sp)

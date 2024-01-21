@@ -2,3 +2,8 @@
 name = "riscv_interpreter"
 version = "0.1.0"
 edition = "2021"
+
+[dependencies]
+codespan-reporting = { version = "0.11.1", features = ["ascii-only"] }
+itertools = "0.12.0"
+rayon = "1.8.1"

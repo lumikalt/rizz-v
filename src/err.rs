@@ -1,19 +1,26 @@
 use std::fmt::{self, Display, Formatter};
 
+#[derive(Debug, Clone)]
 pub enum SyntaxErr {
     TraillingComma,
-    UnmatchedParen,
+    /// false for '(' true for ')'
+    UnmatchedParen(bool),
+    UnexpectedChar,
+    OutsideOp(String),
 }
 
 impl Display for SyntaxErr {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
             SyntaxErr::TraillingComma => write!(f, "trailling comma"),
-            SyntaxErr::UnmatchedParen => write!(f, "unmatched parenthesis"),
+            SyntaxErr::UnmatchedParen(_) => write!(f, "unmatched parenthesis"),
+            SyntaxErr::UnexpectedChar => write!(f, "unexpected character"),
+            SyntaxErr::OutsideOp(kind) => write!(f, "{kind} before opcode"),
         }
     }
 }
 
+#[derive(Debug, Clone)]
 pub enum RuntimeErr {
     InvalidRegister(String),
     UnexpectedImmediate,
