@@ -1,5 +1,5 @@
 /// TODO: Strings, Symbols
-use crate::err::SyntaxErr;
+use crate::{env::Env, err::SyntaxErr};
 use itertools::Itertools;
 use rayon::prelude::*;
 
@@ -58,7 +58,7 @@ pub struct Loc {
     pub end: usize,
 }
 
-fn parse_line(input: &str, line: usize) -> Result<Vec<(Token, Loc)>, ParseErr> {
+fn parse_line(env: &Env, input: &str, line: usize) -> Result<Vec<(Token, Loc)>, ParseErr> {
     let mut loc = Loc {
         line,
         col: 1,
@@ -104,6 +104,9 @@ fn parse_line(input: &str, line: usize) -> Result<Vec<(Token, Loc)>, ParseErr> {
                 Immediate(num.parse().unwrap())
             }
             '(' => {
+                let start = loc.start + 1;
+                let col = loc.col + 1;
+
                 let imm;
                 if let Some((Immediate(_), _)) = tokens.last() {
                     imm = Box::new(tokens.pop().unwrap());
@@ -123,6 +126,23 @@ fn parse_line(input: &str, line: usize) -> Result<Vec<(Token, Loc)>, ParseErr> {
                     chars.peek()
                 {
                     reg.push(chars.next().unwrap());
+                    loc.end += 1;
+                }
+                let end = loc.end + 1;
+
+                let reg = reg.trim();
+                if env.alias_to_register(reg).is_none() && env.xn_to_register(reg).is_none() {
+                    return Err((
+                        SyntaxErr::MemoryInvalidRegister,
+                        Loc {
+                            line,
+                            col,
+                            start,
+                            end,
+                        },
+                        tokens.clone(),
+                        None,
+                    ));
                 }
                 if chars.next() != Some(')') {
                     return Err((
@@ -179,7 +199,7 @@ fn parse_line(input: &str, line: usize) -> Result<Vec<(Token, Loc)>, ParseErr> {
         loc.start = loc.end;
     }
 
-    Ok(tokens
+    let tokens = tokens
         .into_iter()
         .filter(|(token, _)| !matches!(token, Token::Spacing))
         .group_by(|(token, _)| {
@@ -196,6 +216,8 @@ fn parse_line(input: &str, line: usize) -> Result<Vec<(Token, Loc)>, ParseErr> {
                 let (op, loc) = dbg!(dbg!(group[0].clone()));
                 let (op, mut args) = match op {
                     Op(op, args) => (op, args),
+                    // because any register/symbol/label def is interpreted as an Op by default, this only
+                    // partially works. This does trigger on immediate values and memory indexes
                     _ => {
                         return vec![(
                             Token::Error((
@@ -215,7 +237,14 @@ fn parse_line(input: &str, line: usize) -> Result<Vec<(Token, Loc)>, ParseErr> {
                 group.collect::<Vec<_>>()
             }
         })
-        .collect::<Vec<_>>())
+        .collect::<Vec<_>>();
+    if let Some((Token::Error(err), _)) =
+        tokens.iter().find(|line| matches!(line.0, Token::Error(_)))
+    {
+        Err(err.to_owned())
+    } else {
+        Ok(tokens)
+    }
 }
 
 /// Parse the input
@@ -223,12 +252,12 @@ fn parse_line(input: &str, line: usize) -> Result<Vec<(Token, Loc)>, ParseErr> {
 /// Returns a vector of tokens and their locations, if successful, or an error vector
 /// containing the error, the location of the error, the tokens parsed up to that point,
 /// and an optional message to display to the users
-pub fn parse(input: &str) -> Result<Vec<(Token, Loc)>, Vec<ParseErr>> {
+pub fn parse(env: &Env, input: &str) -> Result<Vec<(Token, Loc)>, Vec<ParseErr>> {
     let parsed_lines = input
         .lines()
         .enumerate()
         .par_bridge()
-        .map(|(i, line)| parse_line(line, i + 1))
+        .map(|(i, line)| parse_line(env, line, i + 1))
         .collect::<Vec<_>>();
 
     let (ok, err) = parsed_lines

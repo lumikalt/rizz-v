@@ -1,1 +1,1 @@
-a:  lw a0 1(sp)
+    lw a0 -4(sp)

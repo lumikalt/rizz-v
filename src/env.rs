@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 #[derive(Debug)]
 pub struct Env {
-    register_alias: HashMap<String, usize>,
+    pub register_alias: HashMap<String, usize>,
     labels: HashMap<String, usize>,
     registers: [i64; 32],
     stack: Vec<i64>, // TODO: Find the size of the stack
@@ -67,6 +67,13 @@ impl Env {
 
     pub fn alias_to_register(&self, reg: &str) -> Option<usize> {
         self.register_alias.get(reg).copied()
+    }
+    pub fn xn_to_register(&self, reg: &str) -> Option<usize> {
+        if reg.starts_with("x") {
+            reg[1..].parse::<usize>().ok()
+        } else {
+            None
+        }
     }
 
     pub fn add_label(&mut self, label: &str, value: usize) {

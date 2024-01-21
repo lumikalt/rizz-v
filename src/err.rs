@@ -7,6 +7,7 @@ pub enum SyntaxErr {
     UnmatchedParen(bool),
     UnexpectedChar,
     OutsideOp(String),
+    MemoryInvalidRegister,
 }
 
 impl Display for SyntaxErr {
@@ -16,6 +17,20 @@ impl Display for SyntaxErr {
             SyntaxErr::UnmatchedParen(_) => write!(f, "unmatched parenthesis"),
             SyntaxErr::UnexpectedChar => write!(f, "unexpected character"),
             SyntaxErr::OutsideOp(kind) => write!(f, "{kind} before opcode"),
+            SyntaxErr::MemoryInvalidRegister => write!(f, "invalid register"),
+        }
+    }
+}
+
+impl SyntaxErr {
+    pub fn note(&self) -> String {
+        match self {
+            SyntaxErr::TraillingComma => "remove the final comma".to_string(),
+            SyntaxErr::UnmatchedParen(false) => "add ')' after the register name".to_string(),
+            SyntaxErr::UnmatchedParen(true) => "add '(' before the register name".to_string(),
+            SyntaxErr::UnexpectedChar => "ensure the input is well-formed".to_string(),
+            SyntaxErr::OutsideOp(kind) => format!("add '{}'s only after an opcode", kind),
+            SyntaxErr::MemoryInvalidRegister => "valid registers are of the form xN, 0 <= N < 32, or the standard aliases".to_string(),
         }
     }
 }
