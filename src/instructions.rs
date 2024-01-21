@@ -242,6 +242,14 @@ pub fn instruction(op: &str) -> (Kind, Vec<Value>) {
             Kind::Pseudo(Pseudo {}),
             vec![Value::Register, Value::Immediate],
         ),
+        "lui" => (
+            Kind::U(U {
+                imm: to_bits(0),
+                rd: to_bits(0),
+                opcode: to_bits(0b0110111),
+            }),
+            vec![Value::Register, Value::Immediate],
+        ),
 
         // Memory
 

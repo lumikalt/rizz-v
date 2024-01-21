@@ -62,19 +62,33 @@ fn main() -> anyhow::Result<()> {
             ]
         )
         .0 // 011001101010000001010010110000000
-        // Ripes: 011001101010000001010010110000000
+           // Ripes: 011001101010000001010010110000000
     );
     println!(
         "addi a0 a0 1: {}",
-        with_imm(with_reg_args(
-            instruction("addi"),
-            vec![
-                env.alias_to_register("a0").unwrap() as u32,
-                env.alias_to_register("a0").unwrap() as u32
-            ]
-        ), 1)
+        with_imm(
+            with_reg_args(
+                instruction("addi"),
+                vec![
+                    env.alias_to_register("a0").unwrap(),
+                    env.alias_to_register("a0").unwrap()
+                ]
+            ),
+            1
+        )
         .0 // 00000000000101010000010100010011
-        // Ripes: 00000000000101010000010100010011
+           // Ripes: 00000000000101010000010100010011
+    );
+    println!(
+        "lui a0 1:     {}",
+        with_imm(
+            with_reg_args(
+                instruction("lui"),
+                vec![env.alias_to_register("a0").unwrap()]
+            ),
+            1
+        )
+        .0
     );
 
     Ok(())
