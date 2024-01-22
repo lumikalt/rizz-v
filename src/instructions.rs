@@ -317,7 +317,7 @@ pub fn instruction(op: &str) -> (Kind, Vec<Arg>) {
             }),
             vec![Arg::Register(1), Arg::Register(2), Arg::Immediate],
         ),
-        _ => unimplemented!(),
+        op => unimplemented!("{}", op),
     }
 }
 
