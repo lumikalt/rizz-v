@@ -4,10 +4,8 @@ use itertools::Itertools;
 
 #[derive(Debug, Clone)]
 pub enum Token {
-    /// ' ', '\t', '\r'
+    /// ' ', '\t', '\r', \# blablabla
     Spacing,
-    /// \# blablabla,
-    Comment,
     /// 1, 2, -1
     Immediate(u32),
     /// zero, r1, pc
@@ -16,8 +14,8 @@ pub enum Token {
     Register(String),
     /// add, xor, j
     Op(String, Vec<(Token, Loc)>),
-    /// <label>:
-    LabelDef(String),
+    /// \<label>:
+    Label(String),
     /// 0(a0)
     Memory(Box<Token>, Option<Box<Token>>),
     /// symbol
@@ -34,11 +32,10 @@ impl Token {
         use Token::*;
         match self {
             Spacing => "spacing",
-            Comment => "comment",
             Immediate(_) => "immediate",
             Register(_) => "register",
             Op(_, _) => "op",
-            LabelDef(_) => "label def",
+            Label(_) => "label",
             Memory(_, _) => "memory",
             Symbol(_) => "symbol",
             String(_) => "string",
@@ -71,7 +68,7 @@ fn parse_line(env: &Env, input: &str, loc: &mut Loc) -> Result<Vec<(Token, Loc)>
                     chars.next();
                     loc.end += 1;
                 }
-                Comment
+                Spacing
             }
 
             '0'..='9' => {
@@ -83,7 +80,7 @@ fn parse_line(env: &Env, input: &str, loc: &mut Loc) -> Result<Vec<(Token, Loc)>
                 if let Some('(') | Some(' ') | None = chars.peek() {
                     Immediate(num.parse().unwrap())
                 } else {
-                    return Err((
+                    let err = Err((
                         SyntaxErr::UnexpectedChar,
                         Loc {
                             line: loc.line,
@@ -93,6 +90,8 @@ fn parse_line(env: &Env, input: &str, loc: &mut Loc) -> Result<Vec<(Token, Loc)>
                         tokens.clone(),
                         None,
                     ));
+                    advance_to_next_line(&mut chars, loc);
+                    return err;
                 }
             }
             '-' => {
@@ -110,12 +109,14 @@ fn parse_line(env: &Env, input: &str, loc: &mut Loc) -> Result<Vec<(Token, Loc)>
                     imm = Box::new(tokens.pop().unwrap());
                     loc.start = imm.1.start;
                 } else {
-                    return Err((
+                    let err = Err((
                         SyntaxErr::UnexpectedChar,
                         loc.clone(),
                         tokens.clone(),
                         Some("a memory index must be of the form imm(reg) or imm".to_string()),
                     ));
+                    advance_to_next_line(&mut chars, loc);
+                    return err;
                 }
 
                 let mut reg = std::string::String::new();
@@ -129,7 +130,7 @@ fn parse_line(env: &Env, input: &str, loc: &mut Loc) -> Result<Vec<(Token, Loc)>
 
                 let reg = reg.trim();
                 if !env.is_valid_register(reg) {
-                    return Err((
+                    let err = Err((
                         SyntaxErr::MemoryInvalidRegister,
                         Loc {
                             line: loc.line,
@@ -139,14 +140,18 @@ fn parse_line(env: &Env, input: &str, loc: &mut Loc) -> Result<Vec<(Token, Loc)>
                         tokens.clone(),
                         None,
                     ));
+                    advance_to_next_line(&mut chars, loc);
+                    return err;
                 }
                 if chars.next() != Some(')') {
-                    return Err((
+                    let err = Err((
                         SyntaxErr::UnmatchedParen(false),
                         loc.clone(),
                         tokens.clone(),
                         None,
                     ));
+                    advance_to_next_line(&mut chars, loc);
+                    return err;
                 }
                 loc.end += 2;
 
@@ -156,12 +161,14 @@ fn parse_line(env: &Env, input: &str, loc: &mut Loc) -> Result<Vec<(Token, Loc)>
                 )
             }
             ')' => {
-                return Err((
+                let err = Err((
                     SyntaxErr::UnmatchedParen(true),
                     loc.clone(),
                     tokens.clone(),
                     None,
-                ))
+                ));
+                advance_to_next_line(&mut chars, loc);
+                return err;
             }
 
             // Opcode or Label definition
@@ -176,14 +183,18 @@ fn parse_line(env: &Env, input: &str, loc: &mut Loc) -> Result<Vec<(Token, Loc)>
                 if let Some(':') = chars.peek() {
                     chars.next();
                     loc.end += 1;
-                    LabelDef(str[..str.len()].to_string())
+                    Label(str[..str.len()].to_string())
                 } else {
                     // These Registers may actually be ops, label references or symbols, but there's ambiguity
                     // between them and registers, so we'll just assume they're registers for now
                     Register(str.trim().to_owned())
                 }
             }
-            _ => return Err((SyntaxErr::UnexpectedChar, loc.clone(), tokens.clone(), None)),
+            _ => {
+                let err = Err((SyntaxErr::UnexpectedChar, loc.clone(), tokens.clone(), None));
+                advance_to_next_line(&mut chars, loc);
+                return err;
+            }
         };
         tokens.push((token, loc.clone()));
         loc.end += 1;
@@ -232,8 +243,18 @@ fn parse_line(env: &Env, input: &str, loc: &mut Loc) -> Result<Vec<(Token, Loc)>
                         loc.clone(),
                     )];
                 }
-
-                args.extend_from_slice(&group[1..]);
+                for (token, loc) in group[1..].iter() {
+                    match token.clone() {
+                        Token::Register(name) => {
+                            if env.is_valid_register(&name) {
+                                args.push((token.clone(), loc.clone()));
+                            } else {
+                                args.push((Token::Symbol(name.to_owned()), *loc))
+                            }
+                        }
+                        others => args.push((others, *loc)),
+                    }
+                }
 
                 vec![(Op(name, args), loc)]
             } else {
@@ -280,4 +301,13 @@ pub fn parse(env: &Env, input: &str) -> Result<Vec<(Token, Loc)>, Vec<ParseErr>>
     } else {
         Err(err.into_iter().map(|line| line.unwrap_err()).collect())
     }
+}
+
+fn advance_to_next_line(chars: &mut std::iter::Peekable<std::str::Chars>, loc: &mut Loc) {
+    while let Some(_) = chars.peek() {
+        chars.next();
+        loc.end += 1;
+    }
+    loc.end += 1; // Newline
+    loc.start = loc.end;
 }

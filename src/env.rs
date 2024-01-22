@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use crate::{
     err::RuntimeErr,
-    instructions::{instruction, with, Arg},
+    instructions::{handle_pseudo, instruction, kind::Kind, with, Arg},
     parser::{Loc, Token},
 };
 
@@ -18,8 +18,8 @@ pub enum SymbolValue {
 pub struct Env {
     pub register_alias: HashMap<String, u32>,
     labels: HashMap<String, u32>,
-    registers: [u64; 32],
-    pub stack: Vec<u64>, // TODO: Find the size of the stack
+    registers: [u32; 32],
+    pub stack: Vec<u32>, // TODO: Find the size of the stack
     pub instructions: Vec<u32>,
 }
 
@@ -74,11 +74,11 @@ impl Env {
         }
     }
 
-    pub fn set_register(&mut self, reg: u32, value: u64) {
+    pub fn set_register(&mut self, reg: u32, value: u32) {
         self.registers[reg as usize] = value;
     }
 
-    pub fn get_register(&self, reg: u32) -> u64 {
+    pub fn get_register(&self, reg: u32) -> u32 {
         self.registers[reg as usize]
     }
 
@@ -121,9 +121,17 @@ impl Env {
     pub fn assemble_op(
         &self,
         op: (Token, Loc),
-    ) -> Result<u32, (RuntimeErr, Loc, Option<String>)> {
+    ) -> Result<Vec<u32>, (RuntimeErr, Loc, Option<String>)> {
         if let (Token::Op(name, args), loc) = op {
-            let i = instruction(&name);
+            let i = if let Some(i) = instruction(&name) {
+                i
+            } else {
+                return Err((
+                    RuntimeErr::InvalidOp,
+                    loc,
+                    Some("no implementation exists".to_string()),
+                ));
+            };
             let mut imm = 0u32;
             let mut regs = vec![0; 4];
             if args.len() != i.1.len() {
@@ -145,7 +153,10 @@ impl Env {
                                 Ok(())
                             } else {
                                 Err((
-                                    RuntimeErr::InvalidType("immediate".to_string(), v.kind()),
+                                    RuntimeErr::InvalidType(
+                                        Arg::from(args[k].0.clone()).kind(),
+                                        v.kind(),
+                                    ),
                                     args[k].1,
                                     None,
                                 ))
@@ -157,7 +168,10 @@ impl Env {
                                 Ok(())
                             } else {
                                 Err((
-                                    RuntimeErr::InvalidType("register".to_string(), v.kind()),
+                                    RuntimeErr::InvalidType(
+                                        Arg::from(args[k].0.clone()).kind(),
+                                        v.kind(),
+                                    ),
                                     args[k].1,
                                     None,
                                 ))
@@ -184,17 +198,80 @@ impl Env {
                                 Ok(())
                             } else {
                                 Err((
-                                    RuntimeErr::InvalidType("memory".to_string(), v.kind()),
+                                    RuntimeErr::InvalidType(
+                                        Arg::from(args[k].0.clone()).kind(),
+                                        v.kind(),
+                                    ),
                                     args[k].1,
                                     None,
                                 ))
                             }
                         }
-                        _ => unimplemented!(),
+                        Arg::Symbol => {
+                            if let Token::Symbol(s) = &args[k].0 {
+                                if let Some(v) = self.get_label(&s) {
+                                    imm = v;
+                                    Ok(())
+                                } else {
+                                    Err((
+                                        RuntimeErr::InvalidType(
+                                            Arg::from(args[k].0.clone()).kind(),
+                                            v.kind(),
+                                        ),
+                                        args[k].1,
+                                        None,
+                                    ))
+                                }
+                            } else {
+                                Err((
+                                    RuntimeErr::InvalidType(
+                                        Arg::from(args[k].0.clone()).kind(),
+                                        v.kind(),
+                                    ),
+                                    args[k].1,
+                                    None,
+                                ))
+                            }
+                        }
                     })?;
-            Ok(u32::from_str_radix(dbg!(&with(i, imm, regs).0.to_string()), 2).unwrap())
+            Ok({
+                if let Kind::Pseudo(_) = i.0 {
+                    handle_pseudo(i, imm, regs)
+                        .into_iter()
+                        .map(|x| u32::from_str_radix(&x.0.to_string(), 2).unwrap())
+                        .collect()
+                } else {
+                    vec![u32::from_str_radix(&with(i, imm, regs).0.to_string(), 2).unwrap()]
+                }
+            })
         } else {
             unreachable!()
         }
+    }
+
+    pub fn handle_labels(&mut self, tokens: Vec<(Token, Loc)>) {
+        let mut i = 0;
+        // Calculate the instruction position for all opcodes to
+        // allow for labels to be used before they are defined
+        tokens.into_iter().for_each(|(token, _)| match token {
+            Token::Op(name, _) => {
+                if let Some((kind, args)) = instruction(&name) {
+                    if let Kind::Pseudo(_) = kind {
+                        handle_pseudo((kind, args), 0, vec![0; 4])
+                            .into_iter()
+                            .for_each(|_| i += 1);
+                    } else {
+                        i += 1;
+                    }
+                }
+            }
+            Token::Label(name) => {
+                self.add_label(&name, i * 4);
+            }
+            other => {
+                dbg!(other);
+                unreachable!()
+            }
+        });
     }
 }

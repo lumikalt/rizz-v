@@ -2,7 +2,7 @@
 /// Test values come from Ripes
 use crate::{
     env::Env,
-    instructions::{instruction, with},
+    instructions::{get_instruction, with},
 };
 
 #[test]
@@ -19,7 +19,7 @@ fn nop() {
     assert_eq!(
         u32::from_str_radix(
             &with(
-                instruction("nop"),
+                get_instruction("nop"),
                 0, // imm
                 vec![]
             )
@@ -46,7 +46,7 @@ fn sb() {
     assert_eq!(
         u32::from_str_radix(
             &with(
-                instruction("sb"),
+                get_instruction("sb"),
                 -4i32 as u32, // imm
                 vec![
                     0,                                    // rd
@@ -77,7 +77,7 @@ fn add() {
     assert_eq!(
         u32::from_str_radix(
             &with(
-                instruction("add"),
+                get_instruction("add"),
                 0, // imm
                 vec![
                     env.alias_to_register("a0").unwrap(), // rd
@@ -109,7 +109,7 @@ fn addi() {
     assert_eq!(
         u32::from_str_radix(
             with(
-                instruction("addi"),
+                get_instruction("addi"),
                 1,
                 vec![
                     env.alias_to_register("a0").unwrap(),
@@ -141,7 +141,7 @@ fn beq() {
     assert_eq!(
         u32::from_str_radix(
             &with(
-                instruction("beq"),
+                get_instruction("beq"),
                 4,
                 vec![
                     0, // no rd

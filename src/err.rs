@@ -54,7 +54,7 @@ pub enum RuntimeErr {
 impl Display for RuntimeErr {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
-            RuntimeErr::InvalidOp => write!(f, "invalid operation"),
+            RuntimeErr::InvalidOp => write!(f, "invalid opcode"),
             RuntimeErr::InvalidOpArity(op, actual, expected) => {
                 write!(f, "`{}` expected {} args, got {}", op, expected, actual)
             }
@@ -70,7 +70,7 @@ impl RuntimeErr {
         match self {
             RuntimeErr::InvalidOp => "check the ref sheet for the avaliable opcodes".to_string(),
             RuntimeErr::InvalidOpArity(op, actual, expected) => {
-                let args = instruction(op).1;
+                let args = instruction(op).unwrap().1;
                 match actual.cmp(expected) {
                     Ordering::Equal => unreachable!(),
                     Ordering::Greater if actual - expected == 1 => {

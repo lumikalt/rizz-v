@@ -19,7 +19,7 @@ fn main() -> anyhow::Result<()> {
 
     let file = SimpleFile::new("test.s", input.clone());
 
-    let env = Env::new();
+    let mut env = Env::new();
 
     match parse(&env, &input) {
         Ok(tokens) => {
@@ -28,18 +28,29 @@ fn main() -> anyhow::Result<()> {
 
             tokens.iter().enumerate().for_each(|(line, token)| {
                 let token = token.clone();
-                let mut formatted = format!("{:<1$}", lines[line].to_string() + ":", size + 3);
+                env.handle_labels(tokens.clone());
 
                 match token.0 {
                     Token::Op(..) => match env.assemble_op(token) {
                         Ok(op) => {
-                            formatted += &format!("{:032b}", op);
+                            let mut formatted = format!(
+                                "{:<1$} {2:032b}",
+                                lines[line].to_string() + ":",
+                                size + 3,
+                                op[0]
+                            );
+
+                            if op.len() > 1 {
+                                for op in op[1..].iter() {
+                                    formatted += &format!("{:<1$} {2:032b}", "", size + 3, op);
+                                }
+                            }
                             println!("{}", formatted);
                         }
                         Err(err) => {
                             let diagnostic = Diagnostic::error()
                                 .with_message("Runtime Error")
-                                .with_labels(vec![Label::primary((), err.1.start..err.1.end)
+                                .with_labels(vec![Label::primary((), err.1.start..(err.1.end + 1))
                                     .with_message(err.0.to_string())])
                                 .with_notes({
                                     let mut notes = Vec::new();
@@ -53,7 +64,7 @@ fn main() -> anyhow::Result<()> {
                             term::emit(&mut writer.lock(), &config, &file, &diagnostic).unwrap();
                         }
                     },
-                    Token::LabelDef(name) => {
+                    Token::Label(name) => {
                         println!("{name}:");
                     }
                     _ => unreachable!(),

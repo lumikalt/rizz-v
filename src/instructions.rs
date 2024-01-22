@@ -4,7 +4,7 @@ pub mod kind {
     use crate::instructions::to_u32;
 
     /// will be converted by the engine to a real instruction
-    pub struct Pseudo {}
+    pub struct Pseudo(pub &'static str);
 
     pub struct R {
         pub funct7: [bool; 7],
@@ -110,7 +110,6 @@ pub mod kind {
 
     impl Display for Pseudo {
         fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-            // (pseudo) padded on either side with - to make it 32 characters
             write!(f, "{:0^32}", 0)
         }
     }
@@ -229,6 +228,7 @@ pub enum Arg {
     Immediate,
     /// always ra
     Memory,
+    // Apperently a symbol is a label but in respect to the current pc
     Symbol,
 }
 
@@ -244,17 +244,31 @@ impl Arg {
     }
 }
 
+impl From<Token> for Arg {
+    fn from(token: Token) -> Self {
+        match token {
+            Token::Immediate(_) => Arg::Immediate,
+            Token::Register(_) => Arg::Register(0),
+            Token::Memory(_, _) => Arg::Memory,
+            Token::Symbol(_) => Arg::Symbol,
+            _ => unreachable!(),
+        }
+    }
+}
+
 use kind::*;
 
+use crate::parser::Token;
+
 /// (kind, (arity, Vec<token kind>))
-pub fn instruction(op: &str) -> (Kind, Vec<Arg>) {
-    match op {
+pub fn instruction(op: &str) -> Option<(Kind, Vec<Arg>)> {
+    Some(match op {
         // -
-        "nop" => (Kind::Pseudo(Pseudo {}), vec![]),
+        "nop" => (Kind::Pseudo(Pseudo("nop")), vec![]),
 
         // Move
         "li" => (
-            Kind::Pseudo(Pseudo {}),
+            Kind::Pseudo(Pseudo("li")),
             vec![Arg::Register(0), Arg::Immediate],
         ),
         "lui" => (
@@ -301,7 +315,30 @@ pub fn instruction(op: &str) -> (Kind, Vec<Arg>) {
             }),
             vec![Arg::Register(0), Arg::Register(1), Arg::Immediate],
         ),
+
         // Multiply, Divide
+        "mul" => (
+            Kind::R(R {
+                funct7: to_bits(0b0000001),
+                rb: to_bits(0),
+                ra: to_bits(0),
+                funct3: to_bits(0b000),
+                rd: to_bits(0),
+                opcode: to_bits(0b0110011),
+            }),
+            vec![Arg::Register(0), Arg::Register(1), Arg::Register(2)],
+        ),
+        "div" => (
+            Kind::R(R {
+                funct7: to_bits(0b0000001),
+                rb: to_bits(0),
+                ra: to_bits(0),
+                funct3: to_bits(0b100),
+                rd: to_bits(0),
+                opcode: to_bits(0b0110011),
+            }),
+            vec![Arg::Register(0), Arg::Register(1), Arg::Register(2)],
+        ),
 
         // Compare
 
@@ -317,8 +354,31 @@ pub fn instruction(op: &str) -> (Kind, Vec<Arg>) {
             }),
             vec![Arg::Register(1), Arg::Register(2), Arg::Immediate],
         ),
+        "bne" => (
+            Kind::B(B {
+                imm: to_bits(0),
+                rb: to_bits(0),
+                ra: to_bits(0),
+                funct3: to_bits(0b001),
+                imm2: to_bits(0),
+                opcode: to_bits(0b1100011),
+            }),
+            vec![Arg::Register(1), Arg::Register(2), Arg::Immediate],
+        ),
+        "beqz" => (
+            Kind::Pseudo(Pseudo("beqz")),
+            vec![Arg::Register(1), Arg::Symbol],
+        ),
+        "bnez" => (
+            Kind::Pseudo(Pseudo("bnez")),
+            vec![Arg::Register(1), Arg::Symbol],
+        ),
         op => unimplemented!("{}", op),
-    }
+    })
+}
+
+pub fn get_instruction(op: &str) -> (Kind, Vec<Arg>) {
+    unsafe { instruction(op).unwrap_unchecked() }
 }
 
 /// regs order: rd, ra, rb, rc
@@ -444,6 +504,55 @@ pub fn with((kind, args): (Kind, Vec<Arg>), imm: u32, regs: Vec<u32>) -> (Kind, 
             }),
             args,
         ),
+    }
+}
+
+/// regs order: rd, ra, rb, rc
+pub fn handle_pseudo(
+    (kind, args): (Kind, Vec<Arg>),
+    imm: u32,
+    regs: Vec<u32>,
+) -> Vec<(Kind, Vec<Arg>)> {
+    let op = if let Kind::Pseudo(Pseudo(op)) = kind {
+        op
+    } else {
+        return vec![(kind, args)];
+    };
+
+    match op {
+        "nop" => vec![
+            // addi x0, x0, 0
+            with(get_instruction("addi"), 0, vec![0, 0]),
+        ],
+        "li" => {
+            match imm {
+                // if the immediate is small enough (12 bits), use addi
+                _ if imm >> 12 == 0 => {
+                    vec![with(get_instruction("addi"), imm, regs)]
+                }
+                // if the immediate is a multiple of 0x1000, use lui
+                _ if imm & 0xfff == 0 => {
+                    vec![with(get_instruction("lui"), imm, regs)]
+                }
+                // otherwise, use lui and addi
+                _ => vec![
+                    with(get_instruction("lui"), imm >> 12, regs.clone()),
+                    with(get_instruction("addi"), imm & 0xfff, regs),
+                ],
+            }
+        }
+        "beqz" => vec![
+            // beq ra, x0, imm
+            with(get_instruction("beq"), imm, vec![0, regs[0], 0]),
+        ],
+        "bnez" => vec![
+            // bne ra, x0, imm
+            with(get_instruction("bne"), imm, vec![0, regs[0], 0]),
+        ],
+        other => {
+            dbg!(other);
+            unimplemented!()
+        }
     }
 }
 
