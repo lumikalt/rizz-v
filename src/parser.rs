@@ -57,17 +57,13 @@ pub struct Loc {
     pub end: usize,
 }
 
-fn parse_line(env: &Env, input: &str, line: usize) -> Result<Vec<(Token, Loc)>, ParseErr> {
-    let mut loc = Loc {
-        line,
-        start: 0,
-        end: 0,
-    };
-
+fn parse_line(env: &Env, input: &str, line: usize, loc: &mut Loc) -> Result<Vec<(Token, Loc)>, ParseErr> {
     let mut tokens: Vec<(Token, Loc)> = Vec::new();
     let mut chars = input.chars().peekable();
 
     use Token::*;
+
+    loc.line = line;
 
     while let Some(c) = chars.next() {
         let token = match c {
@@ -87,7 +83,7 @@ fn parse_line(env: &Env, input: &str, line: usize) -> Result<Vec<(Token, Loc)>, 
                     num.push(chars.next().unwrap());
                     loc.end += 1;
                 }
-                if let Some('(') | Some(' ') = chars.peek() {
+                if let Some('(') | Some(' ') | None = chars.peek() {
                     Immediate(num.parse().unwrap())
                 } else {
                     return Err((
@@ -170,8 +166,8 @@ fn parse_line(env: &Env, input: &str, line: usize) -> Result<Vec<(Token, Loc)>, 
             // Opcode or Label definition
             'a'..='z' | 'A'..='Z' | '_' => {
                 let mut str = c.to_string();
-                while let Some('a'..='z') | Some('A'..='Z') | Some('_') | Some('0'..='9') | Some('.') =
-                    chars.peek()
+                while let Some('a'..='z') | Some('A'..='Z') | Some('_') | Some('0'..='9')
+                | Some('.') = chars.peek()
                 {
                     str.push(chars.next().unwrap());
                     loc.end += 1;
@@ -180,34 +176,16 @@ fn parse_line(env: &Env, input: &str, line: usize) -> Result<Vec<(Token, Loc)>, 
                     chars.next();
                     loc.end += 1;
                     LabelDef(str[..str.len()].to_string())
-                } else if let Some((Op(_, _), _)) = tokens.get(tokens.len() - 2) {
-                    // These Registers may actually be label references or symbols, but there's ambiguity
+                } else {
+                    // These Registers may actually be ops, label references or symbols, but there's ambiguity
                     // between them and registers, so we'll just assume they're registers for now
                     Register(str.trim().to_owned())
-                } else {
-                    if env.is_valid_register(&str) {
-                        return Err((
-                            SyntaxErr::OutsideOp("register".to_string()),
-                            loc.clone(),
-                            tokens.clone(),
-                            None,
-                        ));
-                    }
-                    if str.trim().contains(|c: char| !c.is_alphabetic() && c != '.') {
-                        return Err((
-                            SyntaxErr::UnexpectedChar,
-                            dbg!(loc.clone()),
-                            tokens.clone(),
-                            Some("opcodes must only contain ascii letters".to_string()),
-                        ));
-                    }
-                    Op(str, vec![])
                 }
             }
             _ => return Err((SyntaxErr::UnexpectedChar, loc.clone(), tokens.clone(), None)),
         };
         tokens.push((token, loc.clone()));
-        loc.end += 1;
+        loc.end += 1; // Newline
         loc.start = loc.end;
     }
 
@@ -215,10 +193,7 @@ fn parse_line(env: &Env, input: &str, line: usize) -> Result<Vec<(Token, Loc)>, 
         .into_iter()
         .filter(|(token, _)| !matches!(token, Token::Spacing))
         .group_by(|(token, _)| {
-            matches!(
-                token,
-                Op(_, _) | Immediate(_) | Register(_) | Memory(_, _) | Symbol(_) | String(_)
-            )
+            matches!(token, Immediate(_) | Register(_) | Memory(_, _) | Symbol(_))
         })
         .into_iter()
         .flat_map(|group| {
@@ -226,8 +201,8 @@ fn parse_line(env: &Env, input: &str, line: usize) -> Result<Vec<(Token, Loc)>, 
             if is_op {
                 let group = group.collect::<Vec<_>>();
                 let (op, loc) = group[0].clone();
-                let (op, mut args) = match op {
-                    Op(op, args) => (op, args),
+                let (name, mut args) = match op {
+                    Register(r) => (r, vec![]),
                     // because any register/symbol/label def is interpreted as an Op by default, this only
                     // partially works. This does trigger on immediate values and memory indexes
                     _ => {
@@ -242,9 +217,21 @@ fn parse_line(env: &Env, input: &str, line: usize) -> Result<Vec<(Token, Loc)>, 
                         )]
                     }
                 };
+                if env.is_valid_register(&name) {
+                    return vec![(
+                        Token::Error((
+                            SyntaxErr::OutsideOp("register".to_string()),
+                            loc.clone(),
+                            group.clone(),
+                            None,
+                        )),
+                        loc.clone(),
+                    )];
+                }
+
                 args.extend_from_slice(&group[1..]);
 
-                vec![(Op(op, args), loc)]
+                vec![(Op(name, args), loc)]
             } else {
                 group.collect::<Vec<_>>()
             }
@@ -265,21 +252,26 @@ fn parse_line(env: &Env, input: &str, line: usize) -> Result<Vec<(Token, Loc)>, 
 /// containing the error, the location of the error, the tokens parsed up to that point,
 /// and an optional message to display to the users for each line with an error
 pub fn parse(env: &Env, input: &str) -> Result<Vec<(Token, Loc)>, Vec<ParseErr>> {
+    let mut loc = Loc {
+        line: 0,
+        start: 0,
+        end: 0,
+    };
+
     let parsed_lines = input
         .lines()
         .enumerate()
-        .par_bridge()
-        .map(|(i, line)| parse_line(env, line, i + 1))
+        .map(|(i, line)| parse_line(env, line, i + 1, &mut loc))
         .collect::<Vec<_>>();
 
-    let (ok, err) = parsed_lines
-        .into_par_iter()
-        .partition::<Vec<Result<_, _>>, Vec<Result<_, _>>, _>(|line| matches!(line, Ok(_)));
-    dbg!(&err);
+    let (ok, err): (Vec<_>, Vec<_>) = parsed_lines.into_iter()
+        .partition(|line| matches!(line, Ok(_)));
+
+    dbg!(err.clone());
 
     if err.is_empty() {
-        Ok(ok.into_par_iter().flat_map(|line| line.unwrap()).collect())
+        Ok(ok.into_iter().flat_map(|line| line.unwrap()).collect())
     } else {
-        Err(err.into_par_iter().map(|line| line.unwrap_err()).collect())
+        Err(err.into_iter().map(|line| line.unwrap_err()).collect())
     }
 }

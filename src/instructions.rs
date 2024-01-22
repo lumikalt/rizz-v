@@ -222,9 +222,12 @@ pub mod kind {
     }
 }
 
+#[derive(Debug, Clone)]
 pub enum Arg {
-    Register,
+    /// rd -> 0, ra -> 1, rb -> 2, rc -> 3
+    Register(usize),
     Immediate,
+    /// always ra
     Memory,
     Symbol,
 }
@@ -232,7 +235,7 @@ pub enum Arg {
 impl Arg {
     pub fn kind(&self) -> String {
         match self {
-            Arg::Register => "register",
+            Arg::Register(_) => "register",
             Arg::Immediate => "immediate",
             Arg::Memory => "memory",
             Arg::Symbol => "symbol",
@@ -250,14 +253,14 @@ pub fn instruction(op: &str) -> (Kind, Vec<Arg>) {
         "nop" => (Kind::Pseudo(Pseudo {}), vec![]),
 
         // Move
-        "li" => (Kind::Pseudo(Pseudo {}), vec![Arg::Register, Arg::Immediate]),
+        "li" => (Kind::Pseudo(Pseudo {}), vec![Arg::Register(0), Arg::Immediate]),
         "lui" => (
             Kind::U(U {
                 imm: to_bits(0),
                 rd: to_bits(0),
                 opcode: to_bits(0b0110111),
             }),
-            vec![Arg::Register, Arg::Immediate],
+            vec![Arg::Register(0), Arg::Immediate],
         ),
 
         // Memory
@@ -270,7 +273,7 @@ pub fn instruction(op: &str) -> (Kind, Vec<Arg>) {
                 imm2: to_bits(0),
                 opcode: to_bits(0b0100011),
             }),
-            vec![Arg::Register, Arg::Memory],
+            vec![Arg::Register(2), Arg::Memory],
         ),
 
         // Arithmetic, Logic, Shift
@@ -283,7 +286,7 @@ pub fn instruction(op: &str) -> (Kind, Vec<Arg>) {
                 rd: to_bits(0),
                 opcode: to_bits(0b0110011),
             }),
-            vec![Arg::Register, Arg::Register, Arg::Register],
+            vec![Arg::Register(0), Arg::Register(1), Arg::Register(2)],
         ),
         "addi" => (
             Kind::I(I {
@@ -293,7 +296,7 @@ pub fn instruction(op: &str) -> (Kind, Vec<Arg>) {
                 rd: to_bits(0),
                 opcode: to_bits(0b0010011),
             }),
-            vec![Arg::Register, Arg::Register, Arg::Immediate],
+            vec![Arg::Register(0), Arg::Register(1), Arg::Immediate],
         ),
         // Multiply, Divide
 
@@ -309,7 +312,7 @@ pub fn instruction(op: &str) -> (Kind, Vec<Arg>) {
                 imm2: to_bits(0),
                 opcode: to_bits(0b1100011),
             }),
-            vec![Arg::Register, Arg::Register, Arg::Immediate],
+            vec![Arg::Register(1), Arg::Register(2), Arg::Immediate],
         ),
         _ => unimplemented!(),
     }

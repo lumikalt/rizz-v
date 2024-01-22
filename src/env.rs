@@ -1,6 +1,4 @@
-use std::{collections::HashMap, env::Args};
-
-use rayon::iter::{IndexedParallelIterator, IntoParallelIterator, ParallelIterator};
+use std::collections::HashMap;
 
 use crate::{
     err::RuntimeErr,
@@ -14,12 +12,6 @@ pub enum SymbolValue {
     Word(u32),
     DWord(u64),
     String(String),
-}
-
-pub enum Value {
-    Immediate(i64),
-    Register(u32),
-    Symbol(String, SymbolValue),
 }
 
 #[derive(Debug)]
@@ -77,7 +69,7 @@ impl Env {
             register_alias,
             labels: HashMap::new(),
             registers: [0; 32],
-            stack: Vec::from([0; 1024]),
+            stack: Vec::from([0; 1024]), // 1024 * 64 = 64 KiB stack
             instructions: Vec::new(),
         }
     }
@@ -126,50 +118,80 @@ impl Env {
         self.labels.get(label).copied()
     }
 
-    pub fn assemble_op(&mut self, op: (Token, Loc)) -> Result<u32, RuntimeErr> {
+    pub fn assemble_op(
+        &self,
+        op: (Token, Loc),
+    ) -> Result<u32, (RuntimeErr, Loc, Option<String>)> {
         if let (Token::Op(name, args), loc) = op {
             let i = instruction(&name);
             let mut imm = 0u32;
             let mut regs = vec![0; 4];
             if args.len() != i.1.len() {
-                return Err(RuntimeErr::InvalidOpArity(
-                    name,
-                    args.len(),
-                    i.1.len(),
+                return Err((
+                    RuntimeErr::InvalidOpArity(name, args.len(), i.1.len()),
+                    loc,
+                    None,
                 ));
             }
 
-            let _ = i.1.into_par_iter()
-                .enumerate()
-                .try_for_each(|(k, v)| match v {
-                    Arg::Immediate => {
-                        if let Token::Immediate(i) = args[k].0 {
-                            imm = i as u32;
-                            Ok(())
-                        } else {
-                            Err(RuntimeErr::InvalidType("Immediate".to_string(), v.kind()))
-                        }
-                    }
-                    Arg::Register => {
-                        if let Token::Register(r) = args[k].0 {
-                            regs[k] = self.reg_to_register(&r).unwrap();
-                            Ok(())
-                        } else {
-                            Err(RuntimeErr::InvalidType("Register".to_string(), v.kind()))
-                        }
-                    }
-                    Arg::Memory => {
-                        if let Token::Memory(i, r) = args[k].0 {
-                            if r.is_some() {
-                                regs[k] = self.reg_to_register(&r.unwrap()).unwrap();
+            let _ =
+                i.1.clone()
+                    .into_iter()
+                    .enumerate()
+                    .try_for_each(|(k, v)| match v {
+                        Arg::Immediate => {
+                            if let Token::Immediate(i) = args[k].0 {
+                                imm = i as u32;
+                                Ok(())
+                            } else {
+                                Err((
+                                    RuntimeErr::InvalidType("immediate".to_string(), v.kind()),
+                                    args[k].1,
+                                    None,
+                                ))
                             }
-                            Ok(())
-                        } else {
-                            Err(RuntimeErr::InvalidType("Memory".to_string(), v.kind()))
                         }
-                    }
-                    _ => unimplemented!()
-                })?;
+                        Arg::Register(id) => {
+                            if let Token::Register(r) = &args[k].0 {
+                                regs[id] = self.reg_to_register(&r).unwrap();
+                                Ok(())
+                            } else {
+                                Err((
+                                    RuntimeErr::InvalidType("register".to_string(), v.kind()),
+                                    args[k].1,
+                                    None,
+                                ))
+                            }
+                        }
+                        Arg::Memory => {
+                            if let Token::Memory(i, r) = &args[k].0 {
+                                if r.is_some() {
+                                    regs[k] = self
+                                        .reg_to_register(&if let Token::Register(r) =
+                                            *(r.clone().unwrap())
+                                        {
+                                            r
+                                        } else {
+                                            unreachable!()
+                                        })
+                                        .unwrap();
+                                }
+                                imm = if let Token::Immediate(i) = **i {
+                                    i as u32
+                                } else {
+                                    unreachable!()
+                                };
+                                Ok(())
+                            } else {
+                                Err((
+                                    RuntimeErr::InvalidType("memory".to_string(), v.kind()),
+                                    args[k].1,
+                                    None,
+                                ))
+                            }
+                        }
+                        _ => unimplemented!(),
+                    })?;
             Ok(u32::from_str_radix(&with(i, imm, regs).0.to_string(), 2).unwrap())
         } else {
             unreachable!()
