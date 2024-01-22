@@ -1,7 +1,6 @@
 /// TODO: Strings, Symbols
 use crate::{env::Env, err::SyntaxErr};
 use itertools::Itertools;
-use rayon::prelude::*;
 
 #[derive(Debug, Clone)]
 pub enum Token {
@@ -57,13 +56,11 @@ pub struct Loc {
     pub end: usize,
 }
 
-fn parse_line(env: &Env, input: &str, line: usize, loc: &mut Loc) -> Result<Vec<(Token, Loc)>, ParseErr> {
+fn parse_line(env: &Env, input: &str, loc: &mut Loc) -> Result<Vec<(Token, Loc)>, ParseErr> {
     let mut tokens: Vec<(Token, Loc)> = Vec::new();
     let mut chars = input.chars().peekable();
 
     use Token::*;
-
-    loc.line = line;
 
     while let Some(c) = chars.next() {
         let token = match c {
@@ -89,7 +86,7 @@ fn parse_line(env: &Env, input: &str, line: usize, loc: &mut Loc) -> Result<Vec<
                     return Err((
                         SyntaxErr::UnexpectedChar,
                         Loc {
-                            line,
+                            line: loc.line,
                             start: loc.end + 1,
                             end: loc.end + 1,
                         },
@@ -103,7 +100,7 @@ fn parse_line(env: &Env, input: &str, line: usize, loc: &mut Loc) -> Result<Vec<
                 while let Some('0'..='9') = chars.peek() {
                     num.push(chars.next().unwrap());
                 }
-                Immediate(num.parse().unwrap())
+                Immediate(num.parse::<i32>().unwrap() as u32)
             }
             '(' => {
                 let start = loc.start + 2;
@@ -134,7 +131,11 @@ fn parse_line(env: &Env, input: &str, line: usize, loc: &mut Loc) -> Result<Vec<
                 if !env.is_valid_register(reg) {
                     return Err((
                         SyntaxErr::MemoryInvalidRegister,
-                        Loc { line, start, end },
+                        Loc {
+                            line: loc.line,
+                            start,
+                            end,
+                        },
                         tokens.clone(),
                         None,
                     ));
@@ -185,9 +186,12 @@ fn parse_line(env: &Env, input: &str, line: usize, loc: &mut Loc) -> Result<Vec<
             _ => return Err((SyntaxErr::UnexpectedChar, loc.clone(), tokens.clone(), None)),
         };
         tokens.push((token, loc.clone()));
-        loc.end += 1; // Newline
+        loc.end += 1;
         loc.start = loc.end;
     }
+
+    loc.end += 1; // Newline
+    loc.start = loc.end;
 
     let tokens = tokens
         .into_iter()
@@ -261,13 +265,15 @@ pub fn parse(env: &Env, input: &str) -> Result<Vec<(Token, Loc)>, Vec<ParseErr>>
     let parsed_lines = input
         .lines()
         .enumerate()
-        .map(|(i, line)| parse_line(env, line, i + 1, &mut loc))
+        .map(|(i, line)| {
+            loc.line = i + 1;
+            parse_line(env, line, &mut loc)
+        })
         .collect::<Vec<_>>();
 
-    let (ok, err): (Vec<_>, Vec<_>) = parsed_lines.into_iter()
+    let (ok, err): (Vec<_>, Vec<_>) = parsed_lines
+        .into_iter()
         .partition(|line| matches!(line, Ok(_)));
-
-    dbg!(err.clone());
 
     if err.is_empty() {
         Ok(ok.into_iter().flat_map(|line| line.unwrap()).collect())

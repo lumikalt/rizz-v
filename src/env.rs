@@ -192,7 +192,7 @@ impl Env {
                         }
                         _ => unimplemented!(),
                     })?;
-            Ok(u32::from_str_radix(&with(i, imm, regs).0.to_string(), 2).unwrap())
+            Ok(u32::from_str_radix(dbg!(&with(i, imm, regs).0.to_string()), 2).unwrap())
         } else {
             unreachable!()
         }

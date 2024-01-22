@@ -111,7 +111,7 @@ pub mod kind {
     impl Display for Pseudo {
         fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
             // (pseudo) padded on either side with - to make it 32 characters
-            write!(f, "{:-^32}", "(pseudo)")
+            write!(f, "{:0^32}", 0)
         }
     }
     impl Display for R {
@@ -253,7 +253,10 @@ pub fn instruction(op: &str) -> (Kind, Vec<Arg>) {
         "nop" => (Kind::Pseudo(Pseudo {}), vec![]),
 
         // Move
-        "li" => (Kind::Pseudo(Pseudo {}), vec![Arg::Register(0), Arg::Immediate]),
+        "li" => (
+            Kind::Pseudo(Pseudo {}),
+            vec![Arg::Register(0), Arg::Immediate],
+        ),
         "lui" => (
             Kind::U(U {
                 imm: to_bits(0),
