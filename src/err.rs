@@ -30,7 +30,10 @@ impl SyntaxErr {
             SyntaxErr::UnmatchedParen(true) => "add '(' before the register name".to_string(),
             SyntaxErr::UnexpectedChar => "ensure the input is well-formed".to_string(),
             SyntaxErr::OutsideOp(_) => format!("add arguments after the opcode"),
-            SyntaxErr::MemoryInvalidRegister => "registers are either xN (N < 32 with no leading 0) or the standard aliases".to_string(),
+            SyntaxErr::MemoryInvalidRegister => {
+                "registers are either xN (N < 32 with no leading 0) or the standard aliases"
+                    .to_string()
+            }
         }
     }
 }
@@ -42,6 +45,7 @@ pub enum RuntimeErr {
     UnexpectedRegister,
     InvalidOp(String),
     InvalidOpArity(String, usize, usize),
+    InvalidType(String, String),
 }
 
 impl Display for RuntimeErr {
@@ -51,11 +55,14 @@ impl Display for RuntimeErr {
             RuntimeErr::UnexpectedImmediate => write!(f, "unexpected immediate"),
             RuntimeErr::UnexpectedRegister => write!(f, "unexpected register"),
             RuntimeErr::InvalidOp(op) => write!(f, "invalid operation {}", op),
-            RuntimeErr::InvalidOpArity(op, expected, actual) => write!(
+            RuntimeErr::InvalidOpArity(op, actual, expected) => write!(
                 f,
                 "invalid operation arity {} expected {} got {}",
                 op, expected, actual
             ),
+            RuntimeErr::InvalidType(actual, expected) => {
+                write!(f, "expected {}, got {}", expected, actual)
+            }
         }
     }
 }

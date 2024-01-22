@@ -1,13 +1,33 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, env::Args};
 
-use crate::{err::RuntimeErr, parser::{Loc, Token}};
+use rayon::iter::{IndexedParallelIterator, IntoParallelIterator, ParallelIterator};
+
+use crate::{
+    err::RuntimeErr,
+    instructions::{instruction, with, Arg},
+    parser::{Loc, Token},
+};
+
+pub enum SymbolValue {
+    Byte(u8),
+    Half(u16),
+    Word(u32),
+    DWord(u64),
+    String(String),
+}
+
+pub enum Value {
+    Immediate(i64),
+    Register(u32),
+    Symbol(String, SymbolValue),
+}
 
 #[derive(Debug)]
 pub struct Env {
     pub register_alias: HashMap<String, u32>,
     labels: HashMap<String, u32>,
-    registers: [i64; 32],
-    pub stack: Vec<i64>, // TODO: Find the size of the stack
+    registers: [u64; 32],
+    pub stack: Vec<u64>, // TODO: Find the size of the stack
     pub instructions: Vec<u32>,
 }
 
@@ -24,6 +44,7 @@ impl Env {
             ("t1", 6),
             ("t2", 7),
             ("s0", 8),
+            ("fp", 8),
             ("s1", 9),
             ("a0", 10),
             ("a1", 11),
@@ -56,16 +77,16 @@ impl Env {
             register_alias,
             labels: HashMap::new(),
             registers: [0; 32],
-            stack: Vec::new(),
+            stack: Vec::from([0; 1024]),
             instructions: Vec::new(),
         }
     }
 
-    pub fn set_register(&mut self, reg: u32, value: i64) {
+    pub fn set_register(&mut self, reg: u32, value: u64) {
         self.registers[reg as usize] = value;
     }
 
-    pub fn get_register(&self, reg: u32) -> i64 {
+    pub fn get_register(&self, reg: u32) -> u64 {
         self.registers[reg as usize]
     }
 
@@ -84,6 +105,13 @@ impl Env {
             None
         }
     }
+    pub fn reg_to_register(&self, reg: &str) -> Option<u32> {
+        if reg.starts_with("x") {
+            self.xn_to_register(reg)
+        } else {
+            self.alias_to_register(reg)
+        }
+    }
     pub fn is_valid_register(&self, reg: &str) -> bool {
         self.alias_to_register(reg)
             .or_else(|| self.xn_to_register(reg))
@@ -98,12 +126,53 @@ impl Env {
         self.labels.get(label).copied()
     }
 
-    pub fn to_instruction(&self, tokens: Vec<(Token, Loc)>) -> Result<u32, RuntimeErr> {
-        let (op, args) = match &tokens[0].0 {
-            Token::Op(op, args) => (op, args),
-            _ => unreachable!(),
-        };
+    pub fn assemble_op(&mut self, op: (Token, Loc)) -> Result<u32, RuntimeErr> {
+        if let (Token::Op(name, args), loc) = op {
+            let i = instruction(&name);
+            let mut imm = 0u32;
+            let mut regs = vec![0; 4];
+            if args.len() != i.1.len() {
+                return Err(RuntimeErr::InvalidOpArity(
+                    name,
+                    args.len(),
+                    i.1.len(),
+                ));
+            }
 
-        todo!()
+            let _ = i.1.into_par_iter()
+                .enumerate()
+                .try_for_each(|(k, v)| match v {
+                    Arg::Immediate => {
+                        if let Token::Immediate(i) = args[k].0 {
+                            imm = i as u32;
+                            Ok(())
+                        } else {
+                            Err(RuntimeErr::InvalidType("Immediate".to_string(), v.kind()))
+                        }
+                    }
+                    Arg::Register => {
+                        if let Token::Register(r) = args[k].0 {
+                            regs[k] = self.reg_to_register(&r).unwrap();
+                            Ok(())
+                        } else {
+                            Err(RuntimeErr::InvalidType("Register".to_string(), v.kind()))
+                        }
+                    }
+                    Arg::Memory => {
+                        if let Token::Memory(i, r) = args[k].0 {
+                            if r.is_some() {
+                                regs[k] = self.reg_to_register(&r.unwrap()).unwrap();
+                            }
+                            Ok(())
+                        } else {
+                            Err(RuntimeErr::InvalidType("Memory".to_string(), v.kind()))
+                        }
+                    }
+                    _ => unimplemented!()
+                })?;
+            Ok(u32::from_str_radix(&with(i, imm, regs).0.to_string(), 2).unwrap())
+        } else {
+            unreachable!()
+        }
     }
 }

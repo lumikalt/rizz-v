@@ -222,36 +222,56 @@ pub mod kind {
     }
 }
 
-pub enum Value {
+pub enum Arg {
     Register,
     Immediate,
     Memory,
     Symbol,
 }
 
+impl Arg {
+    pub fn kind(&self) -> String {
+        match self {
+            Arg::Register => "register",
+            Arg::Immediate => "immediate",
+            Arg::Memory => "memory",
+            Arg::Symbol => "symbol",
+        }
+        .to_string()
+    }
+}
+
 use kind::*;
 
 /// (kind, (arity, Vec<token kind>))
-pub fn instruction(op: &str) -> (Kind, Vec<Value>) {
+pub fn instruction(op: &str) -> (Kind, Vec<Arg>) {
     match op {
         // -
         "nop" => (Kind::Pseudo(Pseudo {}), vec![]),
 
         // Move
-        "li" => (
-            Kind::Pseudo(Pseudo {}),
-            vec![Value::Register, Value::Immediate],
-        ),
+        "li" => (Kind::Pseudo(Pseudo {}), vec![Arg::Register, Arg::Immediate]),
         "lui" => (
             Kind::U(U {
                 imm: to_bits(0),
                 rd: to_bits(0),
                 opcode: to_bits(0b0110111),
             }),
-            vec![Value::Register, Value::Immediate],
+            vec![Arg::Register, Arg::Immediate],
         ),
 
         // Memory
+        "sb" => (
+            Kind::S(S {
+                imm: to_bits(0),
+                rb: to_bits(0),
+                ra: to_bits(0),
+                funct3: to_bits(0b000),
+                imm2: to_bits(0),
+                opcode: to_bits(0b0100011),
+            }),
+            vec![Arg::Register, Arg::Memory],
+        ),
 
         // Arithmetic, Logic, Shift
         "add" => (
@@ -263,7 +283,7 @@ pub fn instruction(op: &str) -> (Kind, Vec<Value>) {
                 rd: to_bits(0),
                 opcode: to_bits(0b0110011),
             }),
-            vec![Value::Register, Value::Register, Value::Register],
+            vec![Arg::Register, Arg::Register, Arg::Register],
         ),
         "addi" => (
             Kind::I(I {
@@ -273,14 +293,30 @@ pub fn instruction(op: &str) -> (Kind, Vec<Value>) {
                 rd: to_bits(0),
                 opcode: to_bits(0b0010011),
             }),
-            vec![Value::Register, Value::Register, Value::Immediate],
+            vec![Arg::Register, Arg::Register, Arg::Immediate],
+        ),
+        // Multiply, Divide
+
+        // Compare
+
+        // Flow control (branch, jump, call, ret)
+        "beq" => (
+            Kind::B(B {
+                imm: to_bits(0),
+                rb: to_bits(0),
+                ra: to_bits(0),
+                funct3: to_bits(0b000),
+                imm2: to_bits(0),
+                opcode: to_bits(0b1100011),
+            }),
+            vec![Arg::Register, Arg::Register, Arg::Immediate],
         ),
         _ => unimplemented!(),
     }
 }
 
-/// Order: rd, ra, rb, rc
-pub fn with_reg_args((kind, args): (Kind, Vec<Value>), regs: Vec<u32>) -> (Kind, Vec<Value>) {
+/// regs order: rd, ra, rb, rc
+pub fn with((kind, args): (Kind, Vec<Arg>), imm: u32, regs: Vec<u32>) -> (Kind, Vec<Arg>) {
     match kind {
         Kind::Pseudo(_) => (kind, args),
         Kind::R(r) => (
@@ -308,7 +344,7 @@ pub fn with_reg_args((kind, args): (Kind, Vec<Value>), regs: Vec<u32>) -> (Kind,
         ),
         Kind::I(i) => (
             Kind::I(I {
-                imm: i.imm,
+                imm: to_bits(imm),
                 ra: to_bits(regs[1]),
                 funct3: i.funct3,
                 rd: to_bits(regs[0]),
@@ -319,77 +355,10 @@ pub fn with_reg_args((kind, args): (Kind, Vec<Value>), regs: Vec<u32>) -> (Kind,
         Kind::I2(i2) => (
             Kind::I2(I2 {
                 funct6: i2.funct6,
-                imm: i2.imm,
+                imm: to_bits(imm),
                 ra: to_bits(regs[1]),
                 funct3: i2.funct3,
                 rd: to_bits(regs[0]),
-                opcode: i2.opcode,
-            }),
-            args,
-        ),
-        Kind::S(s) => (
-            Kind::S(S {
-                imm: s.imm,
-                rb: to_bits(regs[2]),
-                ra: to_bits(regs[1]),
-                funct3: s.funct3,
-                imm2: s.imm2,
-                opcode: s.opcode,
-            }),
-            args,
-        ),
-        Kind::B(b) => (
-            Kind::B(B {
-                imm: b.imm,
-                rb: to_bits(regs[2]),
-                ra: to_bits(regs[1]),
-                funct3: b.funct3,
-                imm2: b.imm2,
-                opcode: b.opcode,
-            }),
-            args,
-        ),
-        Kind::U(u) => (
-            Kind::U(U {
-                imm: u.imm,
-                rd: to_bits(regs[0]),
-                opcode: u.opcode,
-            }),
-            args,
-        ),
-        Kind::J(j) => (
-            Kind::J(J {
-                imm: j.imm,
-                rd: to_bits(regs[0]),
-                opcode: j.opcode,
-            }),
-            args,
-        ),
-    }
-}
-
-pub fn with_imm((kind, args): (Kind, Vec<Value>), imm: u32) -> (Kind, Vec<Value>) {
-    match kind {
-        Kind::Pseudo(_) => (kind, args),
-        Kind::R(r) => (Kind::R(r), args),
-        Kind::R4(r4) => (Kind::R4(r4), args),
-        Kind::I(i) => (
-            Kind::I(I {
-                imm: to_bits(imm),
-                ra: i.ra,
-                funct3: i.funct3,
-                rd: i.rd,
-                opcode: i.opcode,
-            }),
-            args,
-        ),
-        Kind::I2(i2) => (
-            Kind::I2(I2 {
-                funct6: i2.funct6,
-                imm: to_bits(imm),
-                ra: i2.ra,
-                funct3: i2.funct3,
-                rd: i2.rd,
                 opcode: i2.opcode,
             }),
             args,
@@ -400,15 +369,15 @@ pub fn with_imm((kind, args): (Kind, Vec<Value>), imm: u32) -> (Kind, Vec<Value>
                 Kind::S(S {
                     imm: {
                         let mut imm = [false; 7];
-                        imm.copy_from_slice(&bits[11..=5]);
+                        imm.copy_from_slice(&bits[5..=11]); //.into_iter().rev().map(|&b| b).collect::<Vec<_>>()[..]);
                         imm
                     },
-                    rb: s.rb,
-                    ra: s.ra,
+                    rb: to_bits(regs[2]),
+                    ra: to_bits(regs[1]),
                     funct3: s.funct3,
                     imm2: {
                         let mut imm2 = [false; 5];
-                        imm2.copy_from_slice(&bits[4..=0]);
+                        imm2.copy_from_slice(&bits[0..=4]); //.into_iter().rev().map(|&b| b).collect::<Vec<_>>()[..]);
                         imm2
                     },
                     opcode: s.opcode,
@@ -423,15 +392,15 @@ pub fn with_imm((kind, args): (Kind, Vec<Value>), imm: u32) -> (Kind, Vec<Value>
                     imm: {
                         let mut imm = [false; 7];
                         imm[6] = bits[12];
-                        imm[5..=0].copy_from_slice(&bits[10..=5]);
+                        imm[0..=5].copy_from_slice(&bits[5..=10]);
                         imm
                     },
-                    rb: b.rb,
-                    ra: b.ra,
+                    rb: to_bits(regs[2]),
+                    ra: to_bits(regs[1]),
                     funct3: b.funct3,
                     imm2: {
                         let mut imm2 = [false; 5];
-                        imm2[4..=1].copy_from_slice(&bits[4..=1]);
+                        imm2[1..=4].copy_from_slice(&bits[1..=4]);
                         imm2[0] = bits[11];
                         imm2
                     },
@@ -448,7 +417,7 @@ pub fn with_imm((kind, args): (Kind, Vec<Value>), imm: u32) -> (Kind, Vec<Value>
                     imm.copy_from_slice(&bits[31..=12]);
                     imm
                 },
-                rd: u.rd,
+                rd: to_bits(regs[0]),
                 opcode: u.opcode,
             }),
             args,
@@ -464,7 +433,7 @@ pub fn with_imm((kind, args): (Kind, Vec<Value>), imm: u32) -> (Kind, Vec<Value>
                     imm[7..=0].copy_from_slice(&bits[19..=12]);
                     imm
                 },
-                rd: j.rd,
+                rd: to_bits(regs[0]),
                 opcode: j.opcode,
             }),
             args,

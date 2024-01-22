@@ -10,7 +10,7 @@ pub enum Token {
     /// \# blablabla,
     Comment,
     /// 1, 2, -1
-    Immediate(i64),
+    Immediate(u32),
     /// zero, r1, pc
     ///
     /// Technically also label references and symbols, but we'll handle those later
