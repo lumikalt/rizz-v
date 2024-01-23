@@ -8,8 +8,7 @@ use codespan_reporting::{
     },
 };
 use riscv_interpreter::{
-    env::Env,
-    parser::{parse, Token},
+    env::Env, info::info, parser::{parse, Token}
 };
 
 fn main() -> anyhow::Result<()> {
@@ -104,6 +103,8 @@ fn main() -> anyhow::Result<()> {
             return Ok(());
         }
     };
+
+    println!("{}", info(&env, "lui", vec!["a0".to_string(), "573498".to_string()]).join("\n"));
 
     Ok(())
 }

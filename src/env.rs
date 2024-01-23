@@ -16,7 +16,7 @@ pub enum Variables {
 
 #[derive(Debug)]
 pub struct Env {
-    register_alias: HashMap<String, u32>,
+    register_alias: HashMap<String, usize>,
     labels: HashMap<String, u32>,
     registers: [u32; 32],
     /// EQ, LT, GT
@@ -79,19 +79,20 @@ impl Env {
         }
     }
 
-    pub fn set_register(&mut self, reg: u32, value: u32) {
-        self.registers[reg as usize] = value;
+    pub fn set_register(&mut self, reg: usize, value: u32) {
+        if reg == 0 {
+            return;
+        }
+        self.registers[reg] = value;
     }
-
-    pub fn get_register(&self, reg: u32) -> u32 {
-        self.registers[reg as usize]
+    pub fn get_register(&self, reg: usize) -> u32 {
+        self.registers[reg]
     }
-
-    pub fn str_to_register(&self, reg: &str) -> Option<u32> {
+    pub fn str_to_register(&self, reg: &str) -> Option<usize> {
         if reg == "x0" {
             Some(0)
         } else if reg.starts_with("x") && !reg[1..].starts_with("0") {
-            match reg[1..].parse::<u32>() {
+            match reg[1..].parse::<usize>() {
                 Ok(n) if n < 32 => Some(n),
                 _ => None,
             }
@@ -103,7 +104,6 @@ impl Env {
     pub fn add_label(&mut self, label: &str, value: u32) {
         self.labels.insert(label.to_string(), value);
     }
-
     pub fn get_label(&self, label: &str) -> Option<u32> {
         self.labels.get(label).copied()
     }
@@ -273,7 +273,10 @@ impl Env {
     }
 
     /// Assume memory offsets have been handled
-    pub fn exec_op(&mut self, (op, loc): (Token, Loc)) -> Result<(), (RuntimeErr, Loc, Option<String>)> {
+    pub fn exec_op(
+        &mut self,
+        (op, loc): (Token, Loc),
+    ) -> Result<(), (RuntimeErr, Loc, Option<String>)> {
         let (i, args) = if let Token::Op(name, args) = op {
             if let Some(i) = instruction(&name) {
                 (i, args.clone())

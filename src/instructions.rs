@@ -3,6 +3,8 @@ pub mod kind {
 
     use crate::instructions::to_u32;
 
+    use super::to_reg;
+
     /// will be converted by the engine to a real instruction
     pub struct Pseudo(pub &'static str);
 
@@ -104,6 +106,74 @@ pub mod kind {
                 Kind::B(b) => write!(f, "{}", b),
                 Kind::U(u) => write!(f, "{}", u),
                 Kind::J(j) => write!(f, "{}", j),
+            }
+        }
+    }
+
+    impl Kind {
+        pub fn get_opcode(&self) -> Option<&[bool; 7]> {
+            match self {
+                Kind::Pseudo(_) => None,
+                Kind::R(r) => Some(&r.opcode),
+                Kind::R4(r4) => Some(&r4.opcode),
+                Kind::I(i) => Some(&i.opcode),
+                Kind::I2(i2) => Some(&i2.opcode),
+                Kind::S(s) => Some(&s.opcode),
+                Kind::B(b) => Some(&b.opcode),
+                Kind::U(u) => Some(&u.opcode),
+                Kind::J(j) => Some(&j.opcode),
+            }
+        }
+
+        pub fn get_imm(&self) -> Option<u32> {
+            match self {
+                Kind::Pseudo(_) => None,
+                Kind::R(_) => None,
+                Kind::R4(_) => None,
+                Kind::I(i) => Some(to_u32(&i.imm)),
+                Kind::I2(i2) => Some(to_u32(&i2.imm)),
+                Kind::S(s) => {
+                    let mut imm = [false; 12];
+                    imm[0..=4].copy_from_slice(&s.imm2);
+                    imm[5..=11].copy_from_slice(&s.imm);
+                    Some(to_u32(&imm))
+                }
+                Kind::B(b) => {
+                    let mut imm = [false; 13];
+                    imm[1..=4].copy_from_slice(&b.imm2[1..=4]);
+                    imm[5..=10].copy_from_slice(&b.imm[0..=5]);
+                    imm[11] = b.imm2[0];
+                    imm[12] = b.imm[6];
+                    Some(to_u32(&imm))
+                }
+                Kind::U(u) => Some(to_u32(&u.imm) << 12),
+                Kind::J(j) => {
+                    let mut imm = [false; 21];
+                    imm[1..=10].copy_from_slice(&j.imm[9..=18]);
+                    imm[11] = j.imm[8];
+                    imm[12..=19].copy_from_slice(&j.imm[0..=7]);
+                    imm[20] = j.imm[19];
+                    Some(to_u32(&imm))
+                }
+            }
+        }
+
+        pub fn get_regs(&self) -> Option<Vec<usize>> {
+            match self {
+                Kind::Pseudo(_) => None,
+                Kind::R(r) => Some(vec![to_reg(&r.rd), to_reg(&r.ra), to_reg(&r.rb)]),
+                Kind::R4(r4) => Some(vec![
+                    to_reg(&r4.rd),
+                    to_reg(&r4.ra),
+                    to_reg(&r4.rb),
+                    to_reg(&r4.rc),
+                ]),
+                Kind::I(i) => Some(vec![to_reg(&i.rd), to_reg(&i.ra)]),
+                Kind::I2(i2) => Some(vec![to_reg(&i2.rd), to_reg(&i2.ra)]),
+                Kind::S(s) => Some(vec![0, to_reg(&s.ra), to_reg(&s.rb)]),
+                Kind::B(b) => Some(vec![0, to_reg(&b.ra), to_reg(&b.rb)]),
+                Kind::U(u) => Some(vec![to_reg(&u.rd)]),
+                Kind::J(j) => Some(vec![to_reg(&j.rd)]),
             }
         }
     }
@@ -391,28 +461,28 @@ pub fn get_instruction(op: &str) -> (Kind, Vec<Arg>) {
 }
 
 /// regs order: rd, ra, rb, rc
-pub fn with((kind, args): (Kind, Vec<Arg>), imm: u32, regs: Vec<u32>) -> (Kind, Vec<Arg>) {
+pub fn with((kind, args): (Kind, Vec<Arg>), imm: u32, regs: Vec<usize>) -> (Kind, Vec<Arg>) {
     match kind {
         Kind::Pseudo(_) => (kind, args),
         Kind::R(r) => (
             Kind::R(R {
                 funct7: r.funct7,
-                rb: to_bits(regs[2]),
-                ra: to_bits(regs[1]),
+                rb: reg_bits(regs[2]),
+                ra: reg_bits(regs[1]),
                 funct3: r.funct3,
-                rd: to_bits(regs[0]),
+                rd: reg_bits(regs[0]),
                 opcode: r.opcode,
             }),
             args,
         ),
         Kind::R4(r4) => (
             Kind::R4(R4 {
-                rc: to_bits(regs[3]),
+                rc: reg_bits(regs[3]),
                 funct2: r4.funct2,
-                rb: to_bits(regs[2]),
-                ra: to_bits(regs[1]),
+                rb: reg_bits(regs[2]),
+                ra: reg_bits(regs[1]),
                 funct3: r4.funct3,
-                rd: to_bits(regs[0]),
+                rd: reg_bits(regs[0]),
                 opcode: r4.opcode,
             }),
             args,
@@ -420,9 +490,9 @@ pub fn with((kind, args): (Kind, Vec<Arg>), imm: u32, regs: Vec<u32>) -> (Kind, 
         Kind::I(i) => (
             Kind::I(I {
                 imm: to_bits(imm),
-                ra: to_bits(regs[1]),
+                ra: reg_bits(regs[1]),
                 funct3: i.funct3,
-                rd: to_bits(regs[0]),
+                rd: reg_bits(regs[0]),
                 opcode: i.opcode,
             }),
             args,
@@ -431,9 +501,9 @@ pub fn with((kind, args): (Kind, Vec<Arg>), imm: u32, regs: Vec<u32>) -> (Kind, 
             Kind::I2(I2 {
                 funct6: i2.funct6,
                 imm: to_bits(imm),
-                ra: to_bits(regs[1]),
+                ra: reg_bits(regs[1]),
                 funct3: i2.funct3,
-                rd: to_bits(regs[0]),
+                rd: reg_bits(regs[0]),
                 opcode: i2.opcode,
             }),
             args,
@@ -447,8 +517,8 @@ pub fn with((kind, args): (Kind, Vec<Arg>), imm: u32, regs: Vec<u32>) -> (Kind, 
                         imm.copy_from_slice(&bits[5..=11]);
                         imm
                     },
-                    rb: to_bits(regs[2]),
-                    ra: to_bits(regs[1]),
+                    rb: reg_bits(regs[2]),
+                    ra: reg_bits(regs[1]),
                     funct3: s.funct3,
                     imm2: {
                         let mut imm2 = [false; 5];
@@ -470,8 +540,8 @@ pub fn with((kind, args): (Kind, Vec<Arg>), imm: u32, regs: Vec<u32>) -> (Kind, 
                         imm[0..=5].copy_from_slice(&bits[5..=10]);
                         imm
                     },
-                    rb: to_bits(regs[2]),
-                    ra: to_bits(regs[1]),
+                    rb: reg_bits(regs[2]),
+                    ra: reg_bits(regs[1]),
                     funct3: b.funct3,
                     imm2: {
                         let mut imm2 = [false; 5];
@@ -487,7 +557,7 @@ pub fn with((kind, args): (Kind, Vec<Arg>), imm: u32, regs: Vec<u32>) -> (Kind, 
         Kind::U(u) => (
             Kind::U(U {
                 imm: to_bits(imm >> 12), // 31:12
-                rd: to_bits(regs[0]),
+                rd: reg_bits(regs[0]),
                 opcode: u.opcode,
             }),
             args,
@@ -503,7 +573,7 @@ pub fn with((kind, args): (Kind, Vec<Arg>), imm: u32, regs: Vec<u32>) -> (Kind, 
                     imm[0..=7].copy_from_slice(&bits[12..=19]);
                     imm
                 },
-                rd: to_bits(regs[0]),
+                rd: reg_bits(regs[0]),
                 opcode: j.opcode,
             }),
             args,
@@ -515,7 +585,7 @@ pub fn with((kind, args): (Kind, Vec<Arg>), imm: u32, regs: Vec<u32>) -> (Kind, 
 pub fn handle_pseudo(
     (kind, args): (Kind, Vec<Arg>),
     imm: u32,
-    regs: Vec<u32>,
+    regs: Vec<usize>,
 ) -> Vec<(Kind, Vec<Arg>)> {
     let op = if let Kind::Pseudo(Pseudo(op)) = kind {
         op
@@ -532,16 +602,24 @@ pub fn handle_pseudo(
             match imm {
                 // if the immediate is small enough (12 bits), use addi
                 _ if imm >> 12 == 0 => {
+                    // addi rd, x0, imm
                     vec![with(get_instruction("addi"), imm, regs)]
                 }
                 // if the immediate is a multiple of 0x1000, use lui
                 _ if imm & 0xfff == 0 => {
+                    // lui rd, imm
                     vec![with(get_instruction("lui"), imm, regs)]
                 }
                 // otherwise, use lui and addi
                 _ => vec![
+                    // lui rd, imm
                     with(get_instruction("lui"), imm & 0xfffff000, regs.clone()),
-                    with(get_instruction("addi"), imm & 0x00000fff, regs),
+                    // addi rd, rd, imm
+                    with(
+                        get_instruction("addi"),
+                        imm & 0x00000fff,
+                        vec![regs[0], regs[0]],
+                    ),
                 ],
             }
         }
@@ -572,6 +650,10 @@ const fn to_bits<const N: usize>(val: u32) -> [bool; N] {
     bits
 }
 
+const fn reg_bits<const N: usize>(reg: usize) -> [bool; N] {
+    to_bits(reg as u32)
+}
+
 const fn to_u32<const N: usize>(bits: &[bool; N]) -> u32 {
     let mut val = 0;
     for i in 0..N {
@@ -580,4 +662,8 @@ const fn to_u32<const N: usize>(bits: &[bool; N]) -> u32 {
         }
     }
     val
+}
+
+const fn to_reg<const N: usize>(bits: &[bool; N]) -> usize {
+    to_u32(bits) as usize
 }
