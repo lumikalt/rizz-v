@@ -98,6 +98,7 @@ fn parse_line(env: &Env, input: &str, loc: &mut Loc) -> Result<Vec<(Token, Loc)>
                 let mut num = c.to_string();
                 while let Some('0'..='9') = chars.peek() {
                     num.push(chars.next().unwrap());
+                    loc.end += 1;
                 }
                 Immediate(num.parse::<i32>().unwrap() as u32)
             }

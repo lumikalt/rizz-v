@@ -26,23 +26,23 @@ fn main() -> anyhow::Result<()> {
             let lines: Vec<&str> = input.lines().collect();
             let size = lines.iter().map(|l| l.len()).max().unwrap();
 
-            tokens.iter().enumerate().for_each(|(line, token)| {
+            tokens.iter().for_each(|(token, loc)| {
                 let token = token.clone();
                 env.handle_labels(tokens.clone());
 
-                match token.0 {
-                    Token::Op(..) => match env.assemble_op(token) {
+                match token.clone() {
+                    Token::Op(..) => match env.assemble_op((token, loc.clone())) {
                         Ok(op) => {
                             let mut formatted = format!(
                                 "{:<1$} {2:032b}",
-                                lines[line].to_string() + ":",
+                                lines[loc.line - 1].to_string() + ":",
                                 size + 3,
                                 op[0]
                             );
 
                             if op.len() > 1 {
                                 for op in op[1..].iter() {
-                                    formatted += &format!("{:<1$} {2:032b}", "", size + 3, op);
+                                    formatted += &format!("\n{:<1$} {2:032b}", "", size + 3, op);
                                 }
                             }
                             println!("{}", formatted);
@@ -65,7 +65,12 @@ fn main() -> anyhow::Result<()> {
                         }
                     },
                     Token::Label(name) => {
-                        println!("{name}:");
+                        println!(
+                            "{:<1$} <{2:04x}>",
+                            name.clone() + ":",
+                            size + 3,
+                            env.get_label(&name).unwrap()
+                        );
                     }
                     _ => unreachable!(),
                 }

@@ -228,7 +228,7 @@ pub enum Arg {
     Immediate,
     /// always ra
     Memory,
-    // Apperently a symbol is a label but in respect to the current pc
+    // It's just an immediate but different name in the ref sheet
     Symbol,
 }
 
@@ -373,6 +373,15 @@ pub fn instruction(op: &str) -> Option<(Kind, Vec<Arg>)> {
             Kind::Pseudo(Pseudo("bnez")),
             vec![Arg::Register(1), Arg::Symbol],
         ),
+        "j" => (Kind::Pseudo(Pseudo("j")), vec![Arg::Symbol]),
+        "jal" => (
+            Kind::J(J {
+                imm: to_bits(0),
+                rd: to_bits(0),
+                opcode: to_bits(0b1101111),
+            }),
+            vec![Arg::Register(0), Arg::Symbol],
+        ),
         op => unimplemented!("{}", op),
     })
 }
@@ -477,12 +486,7 @@ pub fn with((kind, args): (Kind, Vec<Arg>), imm: u32, regs: Vec<u32>) -> (Kind, 
         }
         Kind::U(u) => (
             Kind::U(U {
-                imm: {
-                    let bits = to_bits::<32>(imm);
-                    let mut imm = [false; 20];
-                    imm.copy_from_slice(&bits[31..=12]);
-                    imm
-                },
+                imm: to_bits(imm >> 12), // 31:12
                 rd: to_bits(regs[0]),
                 opcode: u.opcode,
             }),
@@ -494,9 +498,9 @@ pub fn with((kind, args): (Kind, Vec<Arg>), imm: u32, regs: Vec<u32>) -> (Kind, 
                     let bits = to_bits::<32>(imm);
                     let mut imm = [false; 20];
                     imm[19] = bits[20];
-                    imm[18..=9].copy_from_slice(&bits[10..=1]);
+                    imm[9..=18].copy_from_slice(&bits[1..=10]);
                     imm[8] = bits[11];
-                    imm[7..=0].copy_from_slice(&bits[19..=12]);
+                    imm[0..=7].copy_from_slice(&bits[12..=19]);
                     imm
                 },
                 rd: to_bits(regs[0]),
@@ -536,8 +540,8 @@ pub fn handle_pseudo(
                 }
                 // otherwise, use lui and addi
                 _ => vec![
-                    with(get_instruction("lui"), imm >> 12, regs.clone()),
-                    with(get_instruction("addi"), imm & 0xfff, regs),
+                    with(get_instruction("lui"), imm & 0xfffff000, regs.clone()),
+                    with(get_instruction("addi"), imm & 0x00000fff, regs),
                 ],
             }
         }
@@ -548,6 +552,10 @@ pub fn handle_pseudo(
         "bnez" => vec![
             // bne ra, x0, imm
             with(get_instruction("bne"), imm, vec![0, regs[0], 0]),
+        ],
+        "j" => vec![
+            // jal x0, imm
+            with(get_instruction("jal"), imm, vec![0]),
         ],
         other => {
             dbg!(other);

@@ -266,7 +266,7 @@ impl Env {
                 }
             }
             Token::Label(name) => {
-                self.add_label(&name, i * 4);
+                self.add_label(&name, (i + 1) * 4);
             }
             other => {
                 dbg!(other);

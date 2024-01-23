@@ -33,6 +33,34 @@ fn nop() {
 }
 
 #[test]
+fn lui() {
+    let env = Env::new();
+
+    #[rustfmt::skip]
+    {
+        // U-Type
+        // |       imm20        |  rd | opcode
+        //  00000000000000000011 01010 0110111
+        //  00000011010100101001 01010 0110111
+    };
+    // lui a0 13609
+    assert_eq!(
+        u32::from_str_radix(
+            &with(
+                get_instruction("lui"),
+                13609 << 12,
+                vec![env.alias_to_register("a0").unwrap()]
+            )
+            .0
+            .to_string(),
+            2
+        )
+        .unwrap(),
+        0b00000011010100101001010100110111u32
+    );
+}
+
+#[test]
 fn sb() {
     let env = Env::new();
 
