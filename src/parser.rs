@@ -51,6 +51,18 @@ pub struct Loc {
     pub line: usize,
     pub start: usize,
     pub end: usize,
+    pub mem_offset: usize,
+}
+
+impl Default for Loc {
+    fn default() -> Self {
+        Self {
+            line: 0,
+            start: 0,
+            end: 0,
+            mem_offset: 0,
+        }
+    }
 }
 
 fn parse_line(env: &Env, input: &str, loc: &mut Loc) -> Result<Vec<(Token, Loc)>, ParseErr> {
@@ -83,9 +95,9 @@ fn parse_line(env: &Env, input: &str, loc: &mut Loc) -> Result<Vec<(Token, Loc)>
                     let err = Err((
                         SyntaxErr::UnexpectedChar,
                         Loc {
-                            line: loc.line,
                             start: loc.end + 1,
                             end: loc.end + 1,
+                            ..*loc
                         },
                         tokens.clone(),
                         None,
@@ -134,9 +146,9 @@ fn parse_line(env: &Env, input: &str, loc: &mut Loc) -> Result<Vec<(Token, Loc)>
                     let err = Err((
                         SyntaxErr::InvalidRegister,
                         Loc {
-                            line: loc.line,
                             start,
                             end,
+                            ..*loc
                         },
                         tokens.clone(),
                         None,
@@ -282,6 +294,7 @@ pub fn parse(env: &Env, input: &str) -> Result<Vec<(Token, Loc)>, Vec<ParseErr>>
         line: 0,
         start: 0,
         end: 0,
+        mem_offset: 0,
     };
 
     let parsed_lines = input

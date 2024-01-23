@@ -27,14 +27,12 @@ fn main() -> anyhow::Result<()> {
             let size = lines.iter().map(|l| l.len()).max().unwrap();
             let mut i = 0;
 
-            tokens.iter().for_each(|(token, loc)| {
+            env.handle_mem_offsets(tokens).iter().for_each(|(token, loc)| {
                 let token = token.clone();
-                env.handle_labels(tokens.clone());
 
                 match token.clone() {
                     Token::Op(..) => match env.assemble_op((token, loc.clone())) {
                         Ok(op) => {
-                            let addr = (loc.line - 1) * 4;
                             let mut formatted = format!(
                                 "{:<1$} {3:02x}: {2:032b}",
                                 lines[loc.line - 1],
@@ -46,7 +44,8 @@ fn main() -> anyhow::Result<()> {
 
                             if op.len() > 1 {
                                 for op in op[1..].iter() {
-                                    formatted += &format!("\n{:<1$} {3:02x}: {2:032b}", "", size + 3, op, i);
+                                    formatted +=
+                                        &format!("\n{:<1$} {3:02x}: {2:032b}", "", size + 3, op, i);
                                     i += 4;
                                 }
                             }

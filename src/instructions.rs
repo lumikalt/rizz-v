@@ -444,7 +444,7 @@ pub fn with((kind, args): (Kind, Vec<Arg>), imm: u32, regs: Vec<u32>) -> (Kind, 
                 Kind::S(S {
                     imm: {
                         let mut imm = [false; 7];
-                        imm.copy_from_slice(&bits[5..=11]); //.into_iter().rev().map(|&b| b).collect::<Vec<_>>()[..]);
+                        imm.copy_from_slice(&bits[5..=11]);
                         imm
                     },
                     rb: to_bits(regs[2]),
@@ -452,7 +452,7 @@ pub fn with((kind, args): (Kind, Vec<Arg>), imm: u32, regs: Vec<u32>) -> (Kind, 
                     funct3: s.funct3,
                     imm2: {
                         let mut imm2 = [false; 5];
-                        imm2.copy_from_slice(&bits[0..=4]); //.into_iter().rev().map(|&b| b).collect::<Vec<_>>()[..]);
+                        imm2.copy_from_slice(&bits[0..=4]);
                         imm2
                     },
                     opcode: s.opcode,
@@ -547,15 +547,15 @@ pub fn handle_pseudo(
         }
         "beqz" => vec![
             // beq ra, x0, imm
-            with(get_instruction("beq"), imm, vec![0, regs[0], 0]),
+            with(get_instruction("beq"), imm, regs),
         ],
         "bnez" => vec![
             // bne ra, x0, imm
-            with(get_instruction("bne"), imm, vec![0, regs[0], 0]),
+            with(get_instruction("bne"), imm, regs),
         ],
         "j" => vec![
             // jal x0, imm
-            with(get_instruction("jal"), imm, vec![0]),
+            with(get_instruction("jal"), imm, regs),
         ],
         other => {
             dbg!(other);
@@ -564,7 +564,7 @@ pub fn handle_pseudo(
     }
 }
 
-fn to_bits<const N: usize>(val: u32) -> [bool; N] {
+const fn to_bits<const N: usize>(val: u32) -> [bool; N] {
     let mut bits = [false; N];
     for i in 0..N {
         bits[i] = (val >> i) & 1 == 1;
@@ -572,7 +572,7 @@ fn to_bits<const N: usize>(val: u32) -> [bool; N] {
     bits
 }
 
-fn to_u32<const N: usize>(bits: &[bool; N]) -> u32 {
+const fn to_u32<const N: usize>(bits: &[bool; N]) -> u32 {
     let mut val = 0;
     for i in 0..N {
         if bits[i] {

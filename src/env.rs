@@ -6,7 +6,7 @@ use crate::{
     parser::{Loc, Token},
 };
 
-pub enum SymbolValue {
+pub enum Variables {
     Byte(u8),
     Half(u16),
     Word(u32),
@@ -16,12 +16,14 @@ pub enum SymbolValue {
 
 #[derive(Debug)]
 pub struct Env {
-    pub register_alias: HashMap<String, u32>,
+    register_alias: HashMap<String, u32>,
     labels: HashMap<String, u32>,
     registers: [u32; 32],
-    pub stack: Vec<u32>, // TODO: Find the size of the stack
+    /// EQ, LT, GT
+    pub cmp_flags: [bool; 3],
+    pub stack: Vec<u32>, // TODO: Find the actual size of the stack
     pub instructions: Vec<u32>,
-    pc: u32,
+    pub pc: u32,
 }
 
 impl Env {
@@ -70,6 +72,7 @@ impl Env {
             register_alias,
             labels: HashMap::new(),
             registers: [0; 32],
+            cmp_flags: [false; 3],
             stack: Vec::from([0; 1024]), // 1024 * 64 = 64 KiB stack
             instructions: Vec::new(),
             pc: 0,
@@ -197,7 +200,7 @@ impl Env {
                         Arg::Symbol => {
                             if let Token::Symbol(s) = &args[k].0 {
                                 if let Some(v) = self.get_label(&s) {
-                                    imm = v;
+                                    imm = (v).wrapping_sub(loc.mem_offset as u32);
                                     Ok(())
                                 } else {
                                     Err((
@@ -236,29 +239,55 @@ impl Env {
         }
     }
 
-    pub fn handle_labels(&mut self, tokens: Vec<(Token, Loc)>) {
+    pub fn handle_mem_offsets(&mut self, mut tokens: Vec<(Token, Loc)>) -> Vec<(Token, Loc)> {
         let mut i = 0;
         // Calculate the instruction position for all opcodes to
         // allow for labels to be used before they are defined
-        tokens.into_iter().for_each(|(token, _)| match token {
-            Token::Op(name, _) => {
-                if let Some((kind, args)) = instruction(&name) {
-                    if let Kind::Pseudo(_) = kind {
-                        handle_pseudo((kind, args), 0, vec![0; 4])
-                            .into_iter()
-                            .for_each(|_| i += 1);
-                    } else {
-                        i += 1;
+        tokens
+            .clone()
+            .into_iter()
+            .enumerate()
+            .for_each(|(id, (token, _))| match token {
+                Token::Op(name, _) => {
+                    if let Some((kind, args)) = instruction(&name) {
+                        if let Kind::Pseudo(_) = kind {
+                            tokens[id].1.mem_offset = i + 4;
+                            handle_pseudo((kind, args), 0, vec![0; 4])
+                                .into_iter()
+                                .for_each(|_| i += 4);
+                        } else {
+                            i += 4;
+                        }
                     }
                 }
+                Token::Label(name) => {
+                    self.add_label(&name, (i + 4) as u32);
+                }
+                other => {
+                    dbg!(other);
+                    unreachable!()
+                }
+            });
+
+        tokens
+    }
+
+    /// Assume memory offsets have been handled
+    pub fn exec_op(&mut self, (op, loc): (Token, Loc)) -> Result<(), (RuntimeErr, Loc, Option<String>)> {
+        let (i, args) = if let Token::Op(name, args) = op {
+            if let Some(i) = instruction(&name) {
+                (i, args.clone())
+            } else {
+                return Err((
+                    RuntimeErr::InvalidOp,
+                    loc,
+                    Some("no implementation exists".to_string()),
+                ));
             }
-            Token::Label(name) => {
-                self.add_label(&name, (i + 1) * 4);
-            }
-            other => {
-                dbg!(other);
-                unreachable!()
-            }
-        });
+        } else {
+            unreachable!()
+        };
+
+        todo!()
     }
 }
