@@ -13,7 +13,7 @@ pub enum SyntaxErr {
     UnmatchedParen(bool),
     UnexpectedChar,
     OutsideOp(String),
-    MemoryInvalidRegister,
+    InvalidRegister,
 }
 
 impl Display for SyntaxErr {
@@ -22,7 +22,7 @@ impl Display for SyntaxErr {
             SyntaxErr::UnmatchedParen(_) => write!(f, "unmatched parenthesis"),
             SyntaxErr::UnexpectedChar => write!(f, "unexpected character"),
             SyntaxErr::OutsideOp(kind) => write!(f, "`{kind}` before opcode"),
-            SyntaxErr::MemoryInvalidRegister => write!(f, "invalid register"),
+            SyntaxErr::InvalidRegister => write!(f, "invalid register"),
         }
     }
 }
@@ -34,7 +34,7 @@ impl SyntaxErr {
             SyntaxErr::UnmatchedParen(true) => "add `(` before the register name".to_string(),
             SyntaxErr::UnexpectedChar => "ensure the input is well-formed".to_string(),
             SyntaxErr::OutsideOp(_) => format!("only add arguments after the opcode"),
-            SyntaxErr::MemoryInvalidRegister => {
+            SyntaxErr::InvalidRegister => {
                 "registers are either xN (N < 32 with no leading 0) or the standard aliases"
                     .to_string()
             }

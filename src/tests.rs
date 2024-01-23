@@ -49,7 +49,7 @@ fn lui() {
             &with(
                 get_instruction("lui"),
                 13609 << 12,
-                vec![env.alias_to_register("a0").unwrap()]
+                vec![env.str_to_register("a0").unwrap()]
             )
             .0
             .to_string(),
@@ -78,8 +78,8 @@ fn sb() {
                 -4i32 as u32, // imm
                 vec![
                     0,                                    // rd
-                    env.alias_to_register("sp").unwrap(), // ra
-                    env.alias_to_register("t5").unwrap()  // rb
+                    env.str_to_register("sp").unwrap(), // ra
+                    env.str_to_register("t5").unwrap()  // rb
                 ],
             )
             .0
@@ -108,9 +108,9 @@ fn add() {
                 get_instruction("add"),
                 0, // imm
                 vec![
-                    env.alias_to_register("a0").unwrap(), // rd
-                    env.alias_to_register("a0").unwrap(), // ra
-                    env.alias_to_register("a1").unwrap()  // rb
+                    env.str_to_register("a0").unwrap(), // rd
+                    env.str_to_register("a0").unwrap(), // ra
+                    env.str_to_register("a1").unwrap()  // rb
                 ]
             )
             .0
@@ -140,8 +140,8 @@ fn addi() {
                 get_instruction("addi"),
                 1,
                 vec![
-                    env.alias_to_register("a0").unwrap(),
-                    env.alias_to_register("a0").unwrap()
+                    env.str_to_register("a0").unwrap(),
+                    env.str_to_register("a0").unwrap()
                 ],
             )
             .0
@@ -173,8 +173,8 @@ fn beq() {
                 4,
                 vec![
                     0, // no rd
-                    env.alias_to_register("a0").unwrap(),
-                    env.alias_to_register("a1").unwrap()
+                    env.str_to_register("a0").unwrap(),
+                    env.str_to_register("a1").unwrap()
                 ]
             )
             .0

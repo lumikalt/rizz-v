@@ -21,6 +21,7 @@ pub struct Env {
     registers: [u32; 32],
     pub stack: Vec<u32>, // TODO: Find the size of the stack
     pub instructions: Vec<u32>,
+    pc: u32,
 }
 
 impl Env {
@@ -71,6 +72,7 @@ impl Env {
             registers: [0; 32],
             stack: Vec::from([0; 1024]), // 1024 * 64 = 64 KiB stack
             instructions: Vec::new(),
+            pc: 0,
         }
     }
 
@@ -82,10 +84,7 @@ impl Env {
         self.registers[reg as usize]
     }
 
-    pub fn alias_to_register(&self, reg: &str) -> Option<u32> {
-        self.register_alias.get(reg).copied()
-    }
-    pub fn xn_to_register(&self, reg: &str) -> Option<u32> {
+    pub fn str_to_register(&self, reg: &str) -> Option<u32> {
         if reg == "x0" {
             Some(0)
         } else if reg.starts_with("x") && !reg[1..].starts_with("0") {
@@ -94,20 +93,8 @@ impl Env {
                 _ => None,
             }
         } else {
-            None
+            self.register_alias.get(reg).copied()
         }
-    }
-    pub fn reg_to_register(&self, reg: &str) -> Option<u32> {
-        if reg.starts_with("x") {
-            self.xn_to_register(reg)
-        } else {
-            self.alias_to_register(reg)
-        }
-    }
-    pub fn is_valid_register(&self, reg: &str) -> bool {
-        self.alias_to_register(reg)
-            .or_else(|| self.xn_to_register(reg))
-            .is_some()
     }
 
     pub fn add_label(&mut self, label: &str, value: u32) {
@@ -164,7 +151,7 @@ impl Env {
                         }
                         Arg::Register(id) => {
                             if let Token::Register(r) = &args[k].0 {
-                                regs[id] = self.reg_to_register(&r).unwrap();
+                                regs[id] = self.str_to_register(&r).unwrap();
                                 Ok(())
                             } else {
                                 Err((
@@ -181,7 +168,7 @@ impl Env {
                             if let Token::Memory(i, r) = &args[k].0 {
                                 if r.is_some() {
                                     regs[k] = self
-                                        .reg_to_register(&if let Token::Register(r) =
+                                        .str_to_register(&if let Token::Register(r) =
                                             *(r.clone().unwrap())
                                         {
                                             r

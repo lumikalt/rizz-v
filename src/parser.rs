@@ -130,9 +130,9 @@ fn parse_line(env: &Env, input: &str, loc: &mut Loc) -> Result<Vec<(Token, Loc)>
                 let end = loc.end + 1;
 
                 let reg = reg.trim();
-                if !env.is_valid_register(reg) {
+                if env.str_to_register(reg).is_none() {
                     let err = Err((
-                        SyntaxErr::MemoryInvalidRegister,
+                        SyntaxErr::InvalidRegister,
                         Loc {
                             line: loc.line,
                             start,
@@ -233,7 +233,7 @@ fn parse_line(env: &Env, input: &str, loc: &mut Loc) -> Result<Vec<(Token, Loc)>
                         )]
                     }
                 };
-                if env.is_valid_register(&name) {
+                if env.str_to_register(&name).is_some() {
                     return vec![(
                         Token::Error((
                             SyntaxErr::OutsideOp("register".to_string()),
@@ -247,7 +247,7 @@ fn parse_line(env: &Env, input: &str, loc: &mut Loc) -> Result<Vec<(Token, Loc)>
                 for (token, loc) in group[1..].iter() {
                     match token.clone() {
                         Token::Register(name) => {
-                            if env.is_valid_register(&name) {
+                            if env.str_to_register(&name).is_some() {
                                 args.push((token.clone(), loc.clone()));
                             } else {
                                 args.push((Token::Symbol(name.to_owned()), *loc))
