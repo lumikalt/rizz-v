@@ -5,6 +5,11 @@ fn lui(env: &mut Env, rd: usize, imm: u32) {
     env.set_register(rd, imm);
 }
 
+/// addi rd, ra, imm
+fn addi(env: &mut Env, rd: usize, ra: usize, imm: u32) {
+    env.set_register(rd, env.get_register(ra) + imm);
+}
+
 /// jal rd, imm
 fn jal(env: &mut Env, rd: usize, imm: u32) {
     env.set_register(rd, env.pc);
@@ -29,9 +34,12 @@ pub fn run_instruction(env: &mut Env, kind: Kind) {
     let imm = kind.get_imm().unwrap();
     let opcode = kind.get_opcode().unwrap();
 
-    match to_u32(opcode) {
+    match opcode {
         0b0110111 => {
             lui(env, rd, imm)
+        }
+        0b0010011 => {
+            addi(env, rd, ra, imm)
         }
         _ => todo!(),
     }

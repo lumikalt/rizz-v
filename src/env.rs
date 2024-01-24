@@ -19,8 +19,7 @@ pub struct Env {
     register_alias: HashMap<String, usize>,
     labels: HashMap<String, u32>,
     registers: [u32; 32],
-    /// EQ, LT, GT
-    pub cmp_flags: [bool; 3],
+    pub prev_stacks: Vec<Vec<u32>>,
     pub stack: Vec<u32>, // TODO: Find the actual size of the stack
     pub instructions: Vec<u32>,
     pub pc: u32,
@@ -72,7 +71,7 @@ impl Env {
             register_alias,
             labels: HashMap::new(),
             registers: [0; 32],
-            cmp_flags: [false; 3],
+            prev_stacks: Vec::new(),
             stack: Vec::from([0; 1024]), // 1024 * 64 = 64 KiB stack
             instructions: Vec::new(),
             pc: 0,
