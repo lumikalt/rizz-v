@@ -6,11 +6,8 @@ pub mod kind {
 
     use bitfield::bitfield;
 
-    use crate::instructions::{instruction, to_u32};
-
-    use super::{to_bits, to_reg};
-
-    /// will be converted by the engine to a real instruction
+    /// will be converted by the engine to real instructions
+    #[derive(Debug)]
     pub struct Pseudo(pub &'static str);
 
     bitfield! {
@@ -108,6 +105,7 @@ pub mod kind {
         pub opcode, set_opcode: 6, 0;
     }
 
+    #[derive(Debug)]
     pub enum Kind {
         Pseudo(Pseudo),
         R(R),
@@ -530,7 +528,7 @@ pub fn with((kind, args): (Kind, Vec<Arg>), imm: u32, regs: Vec<usize>) -> (Kind
             b.set_imm_12(to_bits::<1>(imm >> 12)[0]);
             b.set_imm_11(to_bits::<1>(imm >> 11)[0]);
             b.set_imm_10_5(imm >> 5);
-            b.set_imm_4_1(imm);
+            b.set_imm_4_1(imm >> 1);
             (Kind::B(b), args)
         }
         Kind::U(mut u) => {
@@ -616,22 +614,4 @@ const fn to_bits<const N: usize>(val: u32) -> [bool; N] {
         bits[i] = (val >> i) & 1 == 1;
     }
     bits
-}
-
-const fn reg_bits<const N: usize>(reg: usize) -> [bool; N] {
-    to_bits(reg as u32)
-}
-
-const fn to_u32<const N: usize>(bits: &[bool; N]) -> u32 {
-    let mut val = 0;
-    for i in 0..N {
-        if bits[i] {
-            val |= 1 << i;
-        }
-    }
-    val
-}
-
-const fn to_reg<const N: usize>(bits: &[bool; N]) -> usize {
-    to_u32(bits) as usize
 }

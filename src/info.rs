@@ -2,7 +2,7 @@ use colored::Colorize;
 
 use crate::env::Env;
 
-pub fn info(env: &Env, op: &str, args: Vec<String>) -> Vec<String> {
+pub fn info(_env: &Env, op: &str, args: Vec<String>) -> Vec<String> {
     match op {
         "nop" => vec!["Do nothing - wait 1 cycle".to_string()],
         "li" => vec![format!("load {} into the register {}", args[1], args[0])],

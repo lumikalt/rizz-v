@@ -2,11 +2,10 @@
 /// Test values come from Ripes
 use crate::{
     env::Env,
-    instructions::{get_instruction, with},
+    instructions::{get_instruction, handle_pseudo, with},
 };
 
 #[test]
-#[ignore = "TODO"]
 fn nop() {
     #[rustfmt::skip]
     {
@@ -18,18 +17,51 @@ fn nop() {
     // nop
     assert_eq!(
         u32::from_str_radix(
-            &with(
+            &handle_pseudo(
                 get_instruction("nop"),
                 0, // imm
                 vec![]
-            )
+            )[0]
             .0
             .to_string(),
             2
         )
         .unwrap(),
-        0b00000000000000000000000000010011u32
+        0b00000000000000000000000000010011
     );
+}
+
+#[test]
+fn li() {
+    let env = Env::new();
+
+    #[rustfmt::skip]
+    {
+        // li (pseudo) -> Myriad Sequence (in this case, both addi and lui)
+        // 1 -> lui
+        // U-Type
+        // |       imm20        |  rd | opcode
+        //  00000000000000001101 01010 0110111
+        //  00000000000000001101 01010 0110111
+        // 2 -> addi
+        // I-Type
+        // |   imm12    |  ra |f3 |  rd | opcode
+        //  000000101001 01010 000 01010 0010011
+        //  000000101001 01010 000 01010 0010011
+    };
+    // li a0 53289
+    assert!(handle_pseudo(
+        get_instruction("li"),
+        53289,
+        vec![env.str_to_register("a0").unwrap()]
+    )
+    .into_iter()
+    .map(|i| u32::from_str_radix(dbg!(&i.0.to_string()), 2).unwrap())
+    .eq([
+        0b00000000000000001101010100110111,
+        0b00000010100101010000010100010011
+    ]
+    .into_iter()));
 }
 
 #[test]
@@ -56,7 +88,7 @@ fn lui() {
             2
         )
         .unwrap(),
-        0b00000011010100101001010100110111u32
+        0b00000011010100101001010100110111
     );
 }
 
@@ -77,7 +109,7 @@ fn sb() {
                 get_instruction("sb"),
                 -4i32 as u32, // imm
                 vec![
-                    0,                                    // rd
+                    0,                                  // rd
                     env.str_to_register("sp").unwrap(), // ra
                     env.str_to_register("t5").unwrap()  // rb
                 ],
@@ -87,7 +119,7 @@ fn sb() {
             2
         )
         .unwrap(),
-        0b11111111111000010000111000100011u32
+        0b11111111111000010000111000100011
     );
 }
 
@@ -118,7 +150,7 @@ fn add() {
             2
         )
         .unwrap(),
-        0b00000000101101010000010100110011u32
+        0b00000000101101010000010100110011
     );
 }
 
@@ -150,7 +182,7 @@ fn addi() {
             2
         )
         .unwrap(),
-        0b00000000000101010000010100010011u32
+        0b00000000000101010000010100010011
     );
 }
 
@@ -164,6 +196,7 @@ fn beq() {
         // |  imm7 |  rb |  ra |f3 |imm5 | opcode
         //  0000000 01011 01010 000 00100 1100011
         //  0000000 01011 01010 000 00100 1100011 (Ripes)
+        //  0000000 01011 01010 000 01000 1100011
     };
     // beq a0 a1 4
     assert_eq!(
@@ -182,6 +215,6 @@ fn beq() {
             2
         )
         .unwrap(),
-        0b00000000101101010000001001100011u32
+        0b00000000101101010000001001100011
     );
 }

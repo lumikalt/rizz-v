@@ -18,7 +18,8 @@ pub enum Variables {
 pub struct Env {
     register_alias: HashMap<String, usize>,
     labels: HashMap<String, u32>,
-    registers: [u32; 32],
+    pub registers: [u32; 32],
+    pub fregisters: [f32; 32],
     pub prev_stacks: Vec<Vec<u32>>,
     pub stack: Vec<u32>, // TODO: Find the actual size of the stack
     pub instructions: Vec<u32>,
@@ -29,6 +30,7 @@ impl Env {
     pub fn new() -> Self {
         // alias -> xN
         let register_alias = [
+            // Integer regs
             ("zero", 0),
             ("ra", 1),
             ("sp", 2),
@@ -62,6 +64,39 @@ impl Env {
             ("t4", 29),
             ("t5", 30),
             ("t6", 31),
+            // Floating point regs
+            ("ft0", 0),
+            ("ft1", 1),
+            ("ft2", 2),
+            ("ft3", 3),
+            ("ft4", 4),
+            ("ft5", 5),
+            ("ft6", 6),
+            ("ft7", 7),
+            ("fs0", 8),
+            ("fs1", 9),
+            ("fa0", 10),
+            ("fa1", 11),
+            ("fa2", 12),
+            ("fa3", 13),
+            ("fa4", 14),
+            ("fa5", 15),
+            ("fa6", 16),
+            ("fa7", 17),
+            ("fs2", 18),
+            ("fs3", 19),
+            ("fs4", 20),
+            ("fs5", 21),
+            ("fs6", 22),
+            ("fs7", 23),
+            ("fs8", 24),
+            ("fs9", 25),
+            ("fs10", 26),
+            ("fs11", 27),
+            ("ft8", 28),
+            ("ft9", 29),
+            ("ft10", 30),
+            ("ft11", 31),
         ]
         .iter()
         .map(|(k, v)| (k.to_string(), v.to_owned()))
@@ -71,6 +106,7 @@ impl Env {
             register_alias,
             labels: HashMap::new(),
             registers: [0; 32],
+            fregisters: [0.0; 32],
             prev_stacks: Vec::new(),
             stack: Vec::from([0; 1024]), // 1024 * 64 = 64 KiB stack
             instructions: Vec::new(),
@@ -91,6 +127,22 @@ impl Env {
         if reg == "x0" {
             Some(0)
         } else if reg.starts_with("x") && !reg[1..].starts_with("0") {
+            match reg[1..].parse::<usize>() {
+                Ok(n) if n < 32 => Some(n),
+                _ => None,
+            }
+        } else {
+            self.register_alias.get(reg).copied()
+        }
+    }
+    pub fn set_fregister(&mut self, reg: usize, value: f32) {
+        self.fregisters[reg] = value;
+    }
+    pub fn get_fregister(&self, reg: usize) -> f32 {
+        self.fregisters[reg]
+    }
+    pub fn str_to_fregister(&self, reg: &str) -> Option<usize> {
+        if reg.starts_with("f") && !reg[1..].starts_with("0") {
             match reg[1..].parse::<usize>() {
                 Ok(n) if n < 32 => Some(n),
                 _ => None,
@@ -250,7 +302,7 @@ impl Env {
                 Token::Op(name, _) => {
                     if let Some((kind, args)) = instruction(&name) {
                         if let Kind::Pseudo(_) = kind {
-                            tokens[id].1.mem_offset = i + 4;
+                            tokens[id].1.mem_offset = i;
                             handle_pseudo((kind, args), 0, vec![0; 4])
                                 .into_iter()
                                 .for_each(|_| i += 4);
@@ -276,7 +328,7 @@ impl Env {
         &mut self,
         (op, loc): (Token, Loc),
     ) -> Result<(), (RuntimeErr, Loc, Option<String>)> {
-        let (i, args) = if let Token::Op(name, args) = op {
+        let (_i, _args) = if let Token::Op(name, args) = op {
             if let Some(i) = instruction(&name) {
                 (i, args.clone())
             } else {

@@ -7,8 +7,12 @@ use codespan_reporting::{
         Config,
     },
 };
+use itertools::Itertools;
 use riscv_interpreter::{
-    env::Env, execution::run_instruction, info::info, instructions::{instruction, kind::Kind}, parser::{parse, Token}
+    env::Env,
+    execution::run_instruction,
+    instructions::kind::Kind,
+    parser::{parse, Token},
 };
 
 fn main() -> anyhow::Result<()> {
@@ -33,7 +37,7 @@ fn main() -> anyhow::Result<()> {
                     let token = token.clone();
 
                     match token.clone() {
-                        Token::Op(name, _) => match env.assemble_op((token, loc.clone())) {
+                        Token::Op(..) => match env.assemble_op((token, loc.clone())) {
                             Ok(op) => {
                                 let mut formatted = format!(
                                     "{:<1$} {3:02x}: {2:032b}",
@@ -119,11 +123,7 @@ fn main() -> anyhow::Result<()> {
     for op in ops {
         run_instruction(&mut env, op.0);
 
-        println!(
-            "{:<1$}     <{2:02x}>",
-            op.1,
-            32,
-            env.get_register(10));
+        println!("{}\n{}", op.1, env.registers.iter().enumerate().map(|(i, r)| format!("x{:<1$} {2:032b}", i.to_string() + ":", 3, r)).join("\n"));
     }
 
     Ok(())
