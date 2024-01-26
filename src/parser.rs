@@ -165,7 +165,7 @@ fn parse_line(env: &Env, input: &str, loc: &mut Loc) -> Result<Vec<(Token, Loc)>
                     loc.end += 1;
                 }
                 if let Some('(') | Some(' ') | None = chars.peek() {
-                    Immediate(num.parse().unwrap())
+                    dbg!(Immediate(num.parse().unwrap()))
                 } else {
                     let err = Err((
                         SyntaxErr::UnexpectedChar,
