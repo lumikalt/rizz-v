@@ -16,17 +16,13 @@ fn nop() {
     };
     // nop
     assert_eq!(
-        u32::from_str_radix(
-            &handle_pseudo(
-                get_instruction("nop"),
-                0, // imm
-                vec![]
-            )[0]
-            .0
-            .to_string(),
-            2
-        )
-        .unwrap(),
+        handle_pseudo(
+            get_instruction("nop"),
+            0, // imm
+            vec![]
+        )[0]
+        .0
+        .to_u32(),
         0b00000000000000000000000000010011
     );
 }
@@ -42,11 +38,9 @@ fn li() {
         // U-Type
         // |       imm20        |  rd | opcode
         //  00000000000000001101 01010 0110111
-        //  00000000000000001101 01010 0110111
         // 2 -> addi
         // I-Type
         // |   imm12    |  ra |f3 |  rd | opcode
-        //  000000101001 01010 000 01010 0010011
         //  000000101001 01010 000 01010 0010011
     };
     // li a0 53289
@@ -56,7 +50,7 @@ fn li() {
         vec![env.str_to_register("a0").unwrap()]
     )
     .into_iter()
-    .map(|i| u32::from_str_radix(dbg!(&i.0.to_string()), 2).unwrap())
+    .map(|i| i.0.to_u32())
     .eq([
         0b00000000000000001101010100110111,
         0b00000010100101010000010100010011
@@ -72,22 +66,19 @@ fn lui() {
     {
         // U-Type
         // |       imm20        |  rd | opcode
-        //  00000000000000000011 01010 0110111
         //  00000011010100101001 01010 0110111
+        //  11111111111101111011 01010 0110111
+        //  00001111111101111011 01010 0110111
     };
     // lui a0 13609
     assert_eq!(
-        u32::from_str_radix(
-            &with(
-                get_instruction("lui"),
-                13609 << 12,
-                vec![env.str_to_register("a0").unwrap()]
-            )
-            .0
-            .to_string(),
-            2
+        with(
+            get_instruction("lui"),
+            13609 << 12,
+            vec![env.str_to_register("a0").unwrap()]
         )
-        .unwrap(),
+        .0
+        .to_u32(),
         0b00000011010100101001010100110111
     );
 }
@@ -104,21 +95,17 @@ fn sb() {
     };
     // sb t5 -4(sp)
     assert_eq!(
-        u32::from_str_radix(
-            &with(
-                get_instruction("sb"),
-                -4i32 as u32, // imm
-                vec![
-                    0,                                  // rd
-                    env.str_to_register("sp").unwrap(), // ra
-                    env.str_to_register("t5").unwrap()  // rb
-                ],
-            )
-            .0
-            .to_string(),
-            2
+        with(
+            get_instruction("sb"),
+            -4i32 as u32, // imm
+            vec![
+                0,                                  // rd
+                env.str_to_register("sp").unwrap(), // ra
+                env.str_to_register("t5").unwrap()  // rb
+            ],
         )
-        .unwrap(),
+        .0
+        .to_u32(),
         0b11111111111000010000111000100011
     );
 }
@@ -135,21 +122,17 @@ fn add() {
     };
     // add a0 a0 a1
     assert_eq!(
-        u32::from_str_radix(
-            &with(
-                get_instruction("add"),
-                0, // imm
-                vec![
-                    env.str_to_register("a0").unwrap(), // rd
-                    env.str_to_register("a0").unwrap(), // ra
-                    env.str_to_register("a1").unwrap()  // rb
-                ]
-            )
-            .0
-            .to_string(),
-            2
+        with(
+            get_instruction("add"),
+            0, // imm
+            vec![
+                env.str_to_register("a0").unwrap(), // rd
+                env.str_to_register("a0").unwrap(), // ra
+                env.str_to_register("a1").unwrap()  // rb
+            ]
         )
-        .unwrap(),
+        .0
+        .to_u32(),
         0b00000000101101010000010100110011
     );
 }
@@ -167,21 +150,16 @@ fn addi() {
     };
     // addi a0 a0 1
     assert_eq!(
-        u32::from_str_radix(
-            with(
-                get_instruction("addi"),
-                1,
-                vec![
-                    env.str_to_register("a0").unwrap(),
-                    env.str_to_register("a0").unwrap()
-                ],
-            )
-            .0
-            .to_string()
-            .as_str(),
-            2
+        with(
+            get_instruction("addi"),
+            1,
+            vec![
+                env.str_to_register("a0").unwrap(),
+                env.str_to_register("a0").unwrap()
+            ],
         )
-        .unwrap(),
+        .0
+        .to_u32(),
         0b00000000000101010000010100010011
     );
 }
@@ -200,21 +178,17 @@ fn beq() {
     };
     // beq a0 a1 4
     assert_eq!(
-        u32::from_str_radix(
-            &with(
-                get_instruction("beq"),
-                4,
-                vec![
-                    0, // no rd
-                    env.str_to_register("a0").unwrap(),
-                    env.str_to_register("a1").unwrap()
-                ]
-            )
-            .0
-            .to_string(),
-            2
+        with(
+            get_instruction("beq"),
+            4,
+            vec![
+                0, // no rd
+                env.str_to_register("a0").unwrap(),
+                env.str_to_register("a1").unwrap()
+            ]
         )
-        .unwrap(),
+        .0
+        .to_u32(),
         0b00000000101101010000001001100011
     );
 }

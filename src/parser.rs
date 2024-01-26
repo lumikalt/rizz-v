@@ -83,6 +83,81 @@ fn parse_line(env: &Env, input: &str, loc: &mut Loc) -> Result<Vec<(Token, Loc)>
                 Spacing
             }
 
+            '0' if chars.peek() == Some(&'x') => {
+                chars.next();
+                loc.end += 1;
+                let mut num = std::string::String::new();
+                while let Some('0'..='9') | Some('a'..='f') | Some('A'..='F') = chars.peek() {
+                    num.push(chars.next().unwrap());
+                    loc.end += 1;
+                }
+                if let Some('(') | Some(' ') | None = chars.peek() {
+                    Immediate(u32::from_str_radix(&num, 16).unwrap())
+                } else {
+                    let err = Err((
+                        SyntaxErr::UnexpectedChar,
+                        Loc {
+                            start: loc.end + 1,
+                            end: loc.end + 1,
+                            ..*loc
+                        },
+                        tokens.clone(),
+                        None,
+                    ));
+                    advance_to_next_line(&mut chars, loc);
+                    return err;
+                }
+            }
+            '0' if chars.peek() == Some(&'b') => {
+                chars.next();
+                loc.end += 1;
+                let mut num = std::string::String::new();
+                while let Some('0'..='1') = chars.peek() {
+                    num.push(chars.next().unwrap());
+                    loc.end += 1;
+                }
+                if let Some('(') | Some(' ') | None = chars.peek() {
+                    Immediate(u32::from_str_radix(&num, 2).unwrap())
+                } else {
+                    let err = Err((
+                        SyntaxErr::UnexpectedChar,
+                        Loc {
+                            start: loc.end + 1,
+                            end: loc.end + 1,
+                            ..*loc
+                        },
+                        tokens.clone(),
+                        None,
+                    ));
+                    advance_to_next_line(&mut chars, loc);
+                    return err;
+                }
+            }
+            '0' if chars.peek() == Some(&'o') => {
+                chars.next();
+                loc.end += 1;
+                let mut num = std::string::String::new();
+                while let Some('0'..='7') = chars.peek() {
+                    num.push(chars.next().unwrap());
+                    loc.end += 1;
+                }
+                if let Some('(') | Some(' ') | None = chars.peek() {
+                    Immediate(u32::from_str_radix(&num, 8).unwrap())
+                } else {
+                    let err = Err((
+                        SyntaxErr::UnexpectedChar,
+                        Loc {
+                            start: loc.end + 1,
+                            end: loc.end + 1,
+                            ..*loc
+                        },
+                        tokens.clone(),
+                        None,
+                    ));
+                    advance_to_next_line(&mut chars, loc);
+                    return err;
+                }
+            }
             '0'..='9' => {
                 let mut num = c.to_string();
                 while let Some('0'..='9') = chars.peek() {

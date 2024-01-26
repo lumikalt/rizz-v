@@ -1,8 +1,5 @@
 pub mod kind {
-    use std::{
-        fmt::{self, Display, Formatter},
-        mem,
-    };
+    use std::fmt::{self, Display, Formatter};
 
     use bitfield::bitfield;
 
@@ -154,21 +151,31 @@ pub mod kind {
                 Kind::Pseudo(_) => None,
                 Kind::R(_) => None,
                 Kind::R4(_) => None,
-                Kind::I(i) => Some(i.imm()),
-                Kind::I2(i2) => Some(i2.imm() >> 20),
+                Kind::I(i) => Some(if i.imm() >> 11 == 1 {
+                    i.imm() | 0xFFFFF000
+                } else {
+                    i.imm()
+                }),
+                Kind::I2(i2) => Some(if i2.imm() >> 5 == 1 {
+                    i2.imm() | 0xFFFFFFE0
+                } else {
+                    i2.imm()
+                }),
                 Kind::S(s) => Some(s.imm_11_5() | s.imm_4_0()),
                 Kind::B(b) => Some(
                     ((b.imm_12() as u32) << 12)
                         | ((b.imm_11() as u32) << 11)
                         | (b.imm_10_5() << 5)
-                        | (b.imm_4_1() << 1),
+                        | (b.imm_4_1() << 1)
+                        | if b.imm_12() == true { 0xFFFFE000 } else { 0 },
                 ),
                 Kind::U(u) => Some(u.imm31_12() << 12),
                 Kind::J(j) => Some(
                     ((j.imm_20() as u32) << 20)
                         | ((j.imm_19_12() as u32) << 12)
                         | ((j.imm_11() as u32) << 11)
-                        | (j.imm_10_1() << 1),
+                        | (j.imm_10_1() << 1)
+                        | if j.imm_20() == true { 0xFFE00000 } else { 0 },
                 ),
             }
         }
@@ -194,17 +201,41 @@ pub mod kind {
 
         pub fn to_op(instruction: u32) -> (Kind, String) {
             let opcode = instruction & 0b00000000000000000000000001111111;
+            let funct3 = (instruction & 0b00000000000000000111000000000000) >> 12;
+            let funct7 = (instruction & 0b11111110000000000000000000000000) >> 25;
 
             match opcode {
-                0b0110111 => (
-                    Kind::U(unsafe { mem::transmute_copy(&instruction) }),
-                    "lui".into(),
-                ),
-                0b0010011 => (
-                    Kind::I(unsafe { mem::transmute_copy(&instruction) }),
-                    "addi".into(),
-                ),
-                _ => todo!(),
+                0b0110111 => (Kind::U(U(instruction)), "lui".into()),
+                0b0010011 => (Kind::I(I(instruction)), "addi".into()),
+                0b0110011 if funct3 == 0b000 && funct7 == 0b0000000 => {
+                    (Kind::R(R(instruction)), "add".into())
+                }
+                0b0110011 if funct3 == 0b000 && funct7 == 0b0100000 => {
+                    (Kind::R(R(instruction)), "sub".into())
+                }
+                0b0110011 if funct3 == 0b000 && funct7 == 0b0000001 => {
+                    (Kind::R(R(instruction)), "mul".into())
+                }
+                0b1100011 => (Kind::B(B(instruction)), "beq".into()),
+                0b1101111 => (Kind::J(J(instruction)), "jal".into()),
+                other => {
+                    println!("{:07b}", other);
+                    todo!()
+                }
+            }
+        }
+
+        pub fn to_u32(&self) -> u32 {
+            match self {
+                Kind::Pseudo(_) => unreachable!(),
+                Kind::R(r) => r.0,
+                Kind::R4(r4) => r4.0,
+                Kind::I(i) => i.0,
+                Kind::I2(i2) => i2.0,
+                Kind::S(s) => s.0,
+                Kind::B(b) => b.0,
+                Kind::U(u) => u.0,
+                Kind::J(j) => j.0,
             }
         }
     }
@@ -565,28 +596,32 @@ pub fn handle_pseudo(
             with(get_instruction("addi"), 0, vec![0, 0]),
         ],
         "li" => {
-            match imm {
-                // if the immediate is small enough (12 bits), use addi
-                _ if imm >> 12 == 0 => {
-                    // addi rd, x0, imm
-                    vec![with(get_instruction("addi"), imm, regs)]
-                }
-                // if the immediate is a multiple of 0x1000, use lui
-                _ if imm & 0xfff == 0 => {
+            // if the immediate only has the lower 12 bits set, use addi
+            if imm >> 12 == 0 {
+                // addi rd, x0, imm
+                vec![with(get_instruction("addi"), imm, regs)]
+            }
+            // if the immediate is a multiple of 0x1000, use lui
+            else if imm & 0xfff == 0 {
+                // lui rd, imm
+                vec![with(get_instruction("lui"), imm, regs)]
+            }
+            // otherwise, use lui and addi
+            else {
+                vec![
                     // lui rd, imm
-                    vec![with(get_instruction("lui"), imm, regs)]
-                }
-                // otherwise, use lui and addi
-                _ => vec![
-                    // lui rd, imm
-                    with(get_instruction("lui"), imm & 0xfffff000, regs.clone()),
+                    with(
+                        get_instruction("lui"),
+                        (imm & 0xFFFF000) | ((imm >> 11) & 0x1) << 12,
+                        regs.clone(),
+                    ),
                     // addi rd, rd, imm
                     with(
                         get_instruction("addi"),
                         imm & 0x00000fff,
                         vec![regs[0], regs[0]],
                     ),
-                ],
+                ]
             }
         }
         "beqz" => vec![

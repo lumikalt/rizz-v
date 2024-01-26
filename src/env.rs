@@ -160,7 +160,7 @@ impl Env {
     }
 
     pub fn assemble_op(
-        &self,
+        &mut self,
         op: (Token, Loc),
     ) -> Result<Vec<u32>, (RuntimeErr, Loc, Option<String>)> {
         if let (Token::Op(name, args), loc) = op {
@@ -183,98 +183,107 @@ impl Env {
                 ));
             }
 
-            let _ =
-                i.1.clone()
-                    .into_iter()
-                    .enumerate()
-                    .try_for_each(|(k, v)| match v {
-                        Arg::Immediate => {
-                            if let Token::Immediate(i) = args[k].0 {
-                                imm = i as u32;
+            let _ = i
+                .1
+                .clone()
+                .into_iter()
+                .enumerate()
+                .try_for_each(|(k, v)| match v {
+                    Arg::Immediate => match args[k].0.clone() {
+                        Token::Immediate(i) => {
+                            imm = i as u32;
+                            Ok(())
+                        }
+                        Token::Symbol(s) => {
+                            if let Some(v) = self.get_label(&s) {
+                                imm = v - loc.mem_offset as u32;
                                 Ok(())
                             } else {
                                 Err((
-                                    RuntimeErr::InvalidType(
-                                        Arg::from(args[k].0.clone()).kind(),
-                                        v.kind(),
-                                    ),
+                                    RuntimeErr::LabelNotFound,
                                     args[k].1,
                                     None,
                                 ))
                             }
                         }
-                        Arg::Register(id) => {
-                            if let Token::Register(r) = &args[k].0 {
-                                regs[id] = self.str_to_register(&r).unwrap();
+                        _ => Err((
+                            RuntimeErr::InvalidType(Arg::from(args[k].0.clone()).kind(), v.kind()),
+                            args[k].1,
+                            None,
+                        )),
+                    },
+                    Arg::Register(id) => {
+                        if let Token::Register(r) = &args[k].0 {
+                            regs[id] = self.str_to_register(&r).unwrap();
+                            Ok(())
+                        } else {
+                            Err((
+                                RuntimeErr::InvalidType(
+                                    Arg::from(args[k].0.clone()).kind(),
+                                    v.kind(),
+                                ),
+                                args[k].1,
+                                None,
+                            ))
+                        }
+                    }
+                    Arg::Memory => {
+                        if let Token::Memory(i, r) = &args[k].0 {
+                            if r.is_some() {
+                                regs[k] = self
+                                    .str_to_register(&if let Token::Register(r) =
+                                        *(r.clone().unwrap())
+                                    {
+                                        r
+                                    } else {
+                                        unreachable!()
+                                    })
+                                    .unwrap();
+                            }
+                            imm = if let Token::Immediate(i) = **i {
+                                i as u32
+                            } else {
+                                unreachable!()
+                            };
+                            Ok(())
+                        } else {
+                            Err((
+                                RuntimeErr::InvalidType(
+                                    Arg::from(args[k].0.clone()).kind(),
+                                    v.kind(),
+                                ),
+                                args[k].1,
+                                None,
+                            ))
+                        }
+                    }
+                    Arg::Symbol => {
+                        if let Token::Symbol(s) = &args[k].0 {
+                            if let Some(v) = self.get_label(&s) {
+                                imm = (v).wrapping_sub(loc.mem_offset as u32);
                                 Ok(())
                             } else {
                                 Err((
-                                    RuntimeErr::InvalidType(
-                                        Arg::from(args[k].0.clone()).kind(),
-                                        v.kind(),
-                                    ),
+                                    RuntimeErr::LabelNotFound,
                                     args[k].1,
                                     None,
                                 ))
                             }
+                        } else if let Token::Immediate(i) = &args[k].0 {
+                            imm = *i as u32;
+                            Ok(())
+                        } else {
+                            Err((
+                                RuntimeErr::InvalidType(
+                                    Arg::from(args[k].0.clone()).kind(),
+                                    v.kind(),
+                                ),
+                                args[k].1,
+                                None,
+                            ))
                         }
-                        Arg::Memory => {
-                            if let Token::Memory(i, r) = &args[k].0 {
-                                if r.is_some() {
-                                    regs[k] = self
-                                        .str_to_register(&if let Token::Register(r) =
-                                            *(r.clone().unwrap())
-                                        {
-                                            r
-                                        } else {
-                                            unreachable!()
-                                        })
-                                        .unwrap();
-                                }
-                                imm = if let Token::Immediate(i) = **i {
-                                    i as u32
-                                } else {
-                                    unreachable!()
-                                };
-                                Ok(())
-                            } else {
-                                Err((
-                                    RuntimeErr::InvalidType(
-                                        Arg::from(args[k].0.clone()).kind(),
-                                        v.kind(),
-                                    ),
-                                    args[k].1,
-                                    None,
-                                ))
-                            }
-                        }
-                        Arg::Symbol => {
-                            if let Token::Symbol(s) = &args[k].0 {
-                                if let Some(v) = self.get_label(&s) {
-                                    imm = (v).wrapping_sub(loc.mem_offset as u32);
-                                    Ok(())
-                                } else {
-                                    Err((
-                                        RuntimeErr::InvalidType(
-                                            Arg::from(args[k].0.clone()).kind(),
-                                            v.kind(),
-                                        ),
-                                        args[k].1,
-                                        None,
-                                    ))
-                                }
-                            } else {
-                                Err((
-                                    RuntimeErr::InvalidType(
-                                        Arg::from(args[k].0.clone()).kind(),
-                                        v.kind(),
-                                    ),
-                                    args[k].1,
-                                    None,
-                                ))
-                            }
-                        }
-                    })?;
+                    }
+                })?;
             Ok({
                 if let Kind::Pseudo(_) = i.0 {
                     handle_pseudo(i, imm, regs)
@@ -312,7 +321,7 @@ impl Env {
                     }
                 }
                 Token::Label(name) => {
-                    self.add_label(&name, (i + 4) as u32);
+                    self.add_label(&name, i as u32);
                 }
                 other => {
                     dbg!(other);

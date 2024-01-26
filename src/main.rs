@@ -7,11 +7,11 @@ use codespan_reporting::{
         Config,
     },
 };
+use colored::Colorize;
 use itertools::Itertools;
 use riscv_interpreter::{
     env::Env,
     execution::run_instruction,
-    instructions::kind::Kind,
     parser::{parse, Token},
 };
 
@@ -19,12 +19,13 @@ fn main() -> anyhow::Result<()> {
     let writer = StandardStream::stderr(ColorChoice::Always);
     let config = Config::default();
     let input = std::fs::read_to_string("test.s").unwrap();
+    let term_width = term_size::dimensions().map(|(w, _)| w).unwrap_or(80);
 
     let file = SimpleFile::new("test.s", input.clone());
 
     let mut env = Env::new();
 
-    let mut ops: Vec<(Kind, String)> = Vec::new();
+    let mut ops: Vec<u32> = Vec::new();
 
     match parse(&env, &input) {
         Ok(tokens) => {
@@ -46,7 +47,7 @@ fn main() -> anyhow::Result<()> {
                                     op[0],
                                     loc.mem_offset
                                 );
-                                ops.push(Kind::to_op(op[0].clone()));
+                                ops.push(op[0]);
 
                                 if op.len() > 1 {
                                     for op in op[1..].iter() {
@@ -57,14 +58,14 @@ fn main() -> anyhow::Result<()> {
                                             op,
                                             loc.mem_offset
                                         );
-                                        ops.push(Kind::to_op(op.clone()));
+                                        ops.push(*op);
                                     }
                                 }
                                 println!("{}", formatted);
                             }
                             Err(err) => {
                                 let diagnostic = Diagnostic::error()
-                                    .with_message("Runtime Error")
+                                    .with_message("Engine Error")
                                     .with_labels(vec![Label::primary(
                                         (),
                                         err.1.start..(err.1.end + 1),
@@ -120,11 +121,115 @@ fn main() -> anyhow::Result<()> {
         }
     };
 
-    for op in ops {
-        run_instruction(&mut env, op.0);
+    // Print the register values
 
-        println!("{}\n{}", op.1, env.registers.iter().enumerate().map(|(i, r)| format!("x{:<1$} {2:032b}", i.to_string() + ":", 3, r)).join("\n"));
+    while env.pc / 4 < ops.clone().len() as u32 {
+        let pc = env.pc.clone();
+        let prev_regs = env.registers.clone();
+
+        env.pc += 4 * !run_instruction(&mut env, ops[pc as usize >> 2]) as u32;
+
+        let mut changed = Vec::new();
+
+        for (i, _) in prev_regs
+            .iter()
+            .zip(env.registers.iter())
+            .enumerate()
+            .filter(|(_, (prev, curr))| prev != curr)
+        {
+            changed.push(i);
+        }
+
+        println!(
+            "{}",
+            make_box(
+                term_width as u32,
+                pc as usize,
+                env.registers.clone().into_iter().collect(),
+                changed,
+                's'
+            )
+        );
     }
 
     Ok(())
+}
+
+
+fn round_down_to_power_of_two(n: u32) -> u32 {
+    1 << (32 - n.leading_zeros() - 1)
+}
+
+/// Assuming the terminal is at least 80 characters wide
+/// Display Mode:
+/// - b: binary
+/// - u: unsigned decimal
+/// - h: hex
+/// - s: signed decimal
+/// - f: float
+fn make_box(
+    width: u32,
+    pc: usize,
+    regs: Vec<u32>,
+    changed: Vec<usize>,
+    display_mode: char,
+) -> String {
+    let cell_inner_width: u32 = match display_mode {
+        'b' => 32,
+        'u' => 10,
+        'h' => 8,
+        's' => 11,
+        'f' => todo!("float display mode"),
+        _ => unreachable!(),
+    } + 7;
+
+    // Nnumber of boxes that fit horizontally
+    let num_boxes = round_down_to_power_of_two((width / (cell_inner_width + 2)) as u32);
+    let mut boxed = String::new();
+
+    boxed += &format!(
+        "┌─╢ pc = {pc:04x} ╟{:─<1$}┬",
+        "",
+        cell_inner_width.saturating_sub(14) as usize
+    );
+    for _ in 1..(num_boxes - 1) {
+        boxed += &format!("{:─<1$}┬", "", cell_inner_width as usize);
+    }
+    boxed += &format!("{:─<1$}┐\n", "", cell_inner_width as usize);
+
+    for chunk in &regs.iter().enumerate().chunks(num_boxes as usize) {
+        let chunk = chunk.collect::<Vec<_>>();
+        let mut formatted = String::from("│ ");
+
+        for (i, reg) in chunk {
+            let reg = match display_mode {
+                'b' => format!("x{:<3} {1:0>32b}", i.to_string() + ":", reg),
+                'u' => format!("x{:<3} {1:0>10}", i.to_string() + ":", reg),
+                'h' => format!("x{:<3} {1:0>8x}", i.to_string() + ":", reg),
+                's' => {
+                    let signed = *reg as i32;
+                    let sign = if signed < 0 { "-" } else { "+" };
+                    format!("x{:<3} {}{:0>10}", i.to_string() + ":", sign, signed)
+                }
+                'f' => todo!("float display mode"),
+                _ => unreachable!(),
+            };
+            let reg = if changed.contains(&i) {
+                reg.bright_green()
+            } else {
+                reg.normal()
+            };
+            formatted += &format!("{} │ ", reg);
+        }
+
+        boxed += &format!("{}\n", formatted);
+    }
+
+    boxed += &format!("└{:─<1$}┴", "", cell_inner_width as usize);
+    for _ in 1..(num_boxes - 1) {
+        boxed += &format!("{:─<1$}┴", "", cell_inner_width as usize);
+    }
+    boxed += &format!("{:─<1$}┘", "", cell_inner_width as usize);
+
+    boxed
 }

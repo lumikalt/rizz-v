@@ -21,7 +21,7 @@ impl Display for SyntaxErr {
         match self {
             SyntaxErr::UnmatchedParen(_) => write!(f, "unmatched parenthesis"),
             SyntaxErr::UnexpectedChar => write!(f, "unexpected character"),
-            SyntaxErr::OutsideOp(kind) => write!(f, "`{kind}` before opcode"),
+            SyntaxErr::OutsideOp(kind) => write!(f, "'{kind}' before opcode"),
             SyntaxErr::InvalidRegister => write!(f, "invalid register"),
         }
     }
@@ -49,18 +49,20 @@ pub enum RuntimeErr {
     InvalidOpArity(String, usize, usize),
     /// actual, expected
     InvalidType(String, String),
+    LabelNotFound,
 }
 
 impl Display for RuntimeErr {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
             RuntimeErr::InvalidOp => write!(f, "invalid opcode"),
-            RuntimeErr::InvalidOpArity(op, actual, expected) => {
-                write!(f, "`{}` expected {} args, got {}", op, expected, actual)
+            RuntimeErr::InvalidOpArity(_, actual, expected) => {
+                write!(f, "expected {} args, got {}", expected, actual)
             }
             RuntimeErr::InvalidType(actual, expected) => {
-                write!(f, "expected `{}`, got `{}`", expected, actual)
+                write!(f, "expected '{}', got '{}'", expected, actual)
             }
+            RuntimeErr::LabelNotFound => write!(f, "label not found"),
         }
     }
 }
@@ -78,7 +80,7 @@ impl RuntimeErr {
                     }
                     Ordering::Greater => "remove the extra arguments".to_string(),
                     Ordering::Less if expected - actual == 1 => {
-                        format!("add the extra `{}` argument", args.last().unwrap().kind())
+                        format!("add the extra '{}' argument", args.last().unwrap().kind())
                     }
                     Ordering::Less => format!(
                         "add the extra `{}` arguments",
@@ -86,11 +88,12 @@ impl RuntimeErr {
                             .unwrap()
                             .iter()
                             .map(|arg| arg.kind())
-                            .join("`, `")
+                            .join("', '")
                     ),
                 }
             }
             RuntimeErr::InvalidType(_, _) => "ensure the operation is valid".to_string(),
+            RuntimeErr::LabelNotFound => "ensure the label is spelled correctly".to_string(),
         }
     }
 }
