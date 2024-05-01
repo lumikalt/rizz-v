@@ -3,6 +3,7 @@ pub mod kind {
 
     use bitfield::bitfield;
 
+    /// A pseudo instruction is an instruction that
     /// will be converted by the engine to real instructions
     #[derive(Debug)]
     pub struct Pseudo(pub &'static str);
@@ -218,8 +219,20 @@ pub mod kind {
                 }
                 0b1100011 => (Kind::B(B(instruction)), "beq".into()),
                 0b1101111 => (Kind::J(J(instruction)), "jal".into()),
+                0b1010011 if funct7 == 0x00 => {
+                    (Kind::R(R(instruction)), "fadd.s".into())
+                }
+                0b1010011 if funct7 == 0x0c => {
+                    (Kind::R(R(instruction)), "fdiv.s".into())
+                }
+                0b1010011 if funct7 == 0x68 => {
+                    (Kind::R(R(instruction)), "fcvt.s.w".into())
+                }
+                0b1010011 if funct7 == 0x78 => {
+                    (Kind::R(R(instruction)), "fmv.w.x".into())
+                }
                 other => {
-                    println!("{:07b}", other);
+                    println!("todo: opcode={:07b}", other);
                     todo!()
                 }
             }
@@ -509,6 +522,52 @@ pub fn instruction(op: &str) -> Option<(Kind, Vec<Arg>)> {
             }),
             vec![Arg::Register(0), Arg::Symbol],
         ),
+
+        // F Extension - assune rm is 0b000
+
+        // Arithmetic
+        "fadd.s" => (
+            Kind::R({
+                let mut r = R(0);
+                r.set_funct7(0x00);
+                r.set_funct3(0b000);
+                r.set_opcode(0b1010011);
+                r
+            }),
+            vec![Arg::Register(0), Arg::Register(1), Arg::Register(2)],
+        ),
+        "fdiv.s" => (
+            Kind::R({
+                let mut r = R(0);
+                r.set_funct7(0x0c);
+                r.set_funct3(0b000);
+                r.set_opcode(0b1010011);
+                r
+            }),
+            vec![Arg::Register(0), Arg::Register(1), Arg::Register(2)],
+        ),
+
+        // Move / Convert
+        "fcvt.s.w" => (
+            Kind::R({
+                let mut r = R(0);
+                r.set_funct7(0x68);
+                r.set_funct3(0b000);
+                r.set_opcode(0b1010011);
+                r
+            }),
+            vec![Arg::Register(0), Arg::Register(1)], // rb is not used
+        ),
+        "fmv.w.x" => (
+            Kind::R({
+                let mut r = R(0);
+                r.set_funct7(0x78);
+                r.set_funct3(0b000);
+                r.set_opcode(0b1010011);
+                r
+            }),
+            vec![Arg::Register(0), Arg::Register(1)], // rb is not used
+        ),
         op => unimplemented!("{}", op),
     })
 }
@@ -612,7 +671,7 @@ pub fn handle_pseudo(
                     // lui rd, imm
                     with(
                         get_instruction("lui"),
-                        (imm & 0xFFFF000) | ((imm >> 11) & 0x1) << 12,
+                        (imm & 0xfffff000) ^ ((imm >> 11) & 0x1) << 12,
                         regs.clone(),
                     ),
                     // addi rd, rd, imm
