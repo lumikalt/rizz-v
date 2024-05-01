@@ -9,20 +9,30 @@ use crate::instructions::instruction;
 
 #[derive(Debug, Clone)]
 pub enum SyntaxErr {
+    UnexpectedChar,
+
+    //.text specific
     /// false for '(' true for ')'
     UnmatchedParen(bool),
-    UnexpectedChar,
-    OutsideOp(String),
+    OutsideMnemonic(String),
     InvalidRegister,
+
+    // .data specific
+    InvalidType,
+    InvalidVarName,
+    MalformedData,
 }
 
 impl Display for SyntaxErr {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
-            SyntaxErr::UnmatchedParen(_) => write!(f, "unmatched parenthesis"),
             SyntaxErr::UnexpectedChar => write!(f, "unexpected character"),
-            SyntaxErr::OutsideOp(kind) => write!(f, "'{kind}' before opcode"),
+            SyntaxErr::UnmatchedParen(_) => write!(f, "unmatched parenthesis"),
+            SyntaxErr::OutsideMnemonic(kind) => write!(f, "unexpected '{kind}'"),
             SyntaxErr::InvalidRegister => write!(f, "invalid register"),
+            SyntaxErr::InvalidType => write!(f, "invalid type"),
+            SyntaxErr::InvalidVarName => write!(f, "invalid variable name"),
+            SyntaxErr::MalformedData => write!(f, "malformed global definition"),
         }
     }
 }
@@ -30,36 +40,39 @@ impl Display for SyntaxErr {
 impl SyntaxErr {
     pub fn note(&self) -> String {
         match self {
-            SyntaxErr::UnmatchedParen(false) => "add `)` after the register name".to_string(),
-            SyntaxErr::UnmatchedParen(true) => "add `(` before the register name".to_string(),
             SyntaxErr::UnexpectedChar => "ensure the input is well-formed".to_string(),
-            SyntaxErr::OutsideOp(_) => format!("only add arguments after the opcode"),
+            SyntaxErr::UnmatchedParen(false) => "add `)` after the register".to_string(),
+            SyntaxErr::UnmatchedParen(true) => "add `(` before the register".to_string(),
+            SyntaxErr::OutsideMnemonic(_) => format!("only add arguments after the mnemonic"),
             SyntaxErr::InvalidRegister => {
-                "registers are either xN (N < 32 with no leading 0) or the standard aliases"
-                    .to_string()
+                "registers are either (x|f)N, for N < 32 with no leading 0, or an alias".to_string()
             }
+            SyntaxErr::InvalidType => "check the spec for proper types".to_string(),
+            SyntaxErr::InvalidVarName => "variable names must be alphanumeric".to_string(),
+            SyntaxErr::MalformedData => "ensure the global definition is well-formed".to_string(),
         }
     }
 }
 
 #[derive(Debug, Clone)]
 pub enum RuntimeErr {
-    InvalidOp,
+    /// TODO: only worth using this after all the instructions are implemented!
+    InvalidMnemonic,
     /// op, actual, expected
     InvalidOpArity(String, usize, usize),
     /// actual, expected
-    InvalidType(String, String),
+    TypeMissmatch(String, String),
     LabelNotFound,
 }
 
 impl Display for RuntimeErr {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
-            RuntimeErr::InvalidOp => write!(f, "invalid opcode"),
+            RuntimeErr::InvalidMnemonic => write!(f, "invalid mnemonic"),
             RuntimeErr::InvalidOpArity(_, actual, expected) => {
                 write!(f, "expected {} args, got {}", expected, actual)
             }
-            RuntimeErr::InvalidType(actual, expected) => {
+            RuntimeErr::TypeMissmatch(actual, expected) => {
                 write!(f, "expected '{}', got '{}'", expected, actual)
             }
             RuntimeErr::LabelNotFound => write!(f, "label not found"),
@@ -70,7 +83,9 @@ impl Display for RuntimeErr {
 impl RuntimeErr {
     pub fn note(&self) -> String {
         match self {
-            RuntimeErr::InvalidOp => "check the ref sheet for the avaliable opcodes".to_string(),
+            RuntimeErr::InvalidMnemonic => {
+                "check the ref sheet for the avaliable mnemonics".to_string()
+            }
             RuntimeErr::InvalidOpArity(op, actual, expected) => {
                 let args = instruction(op).unwrap().1;
                 match actual.cmp(expected) {
@@ -92,7 +107,9 @@ impl RuntimeErr {
                     ),
                 }
             }
-            RuntimeErr::InvalidType(_, _) => "ensure the operation is valid".to_string(),
+            RuntimeErr::TypeMissmatch(_, _) => {
+                "ensure the instruction is getting the right arguments".to_string()
+            }
             RuntimeErr::LabelNotFound => "ensure the label is spelled correctly".to_string(),
         }
     }
