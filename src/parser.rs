@@ -311,7 +311,7 @@ fn parse_line(env: &Env, input: &str, loc: &mut Loc) -> Result<Vec<(Token, Loc)>
                     _ => {
                         return vec![(
                             Token::Error((
-                                SyntaxErr::OutsideOp(op.kind().to_string()),
+                                SyntaxErr::OutsideMnemonic(op.kind().to_string()),
                                 loc.clone(),
                                 group.clone(),
                                 None,
@@ -323,7 +323,7 @@ fn parse_line(env: &Env, input: &str, loc: &mut Loc) -> Result<Vec<(Token, Loc)>
                 if env.str_to_register(&name).is_some() {
                     return vec![(
                         Token::Error((
-                            SyntaxErr::OutsideOp("register".to_string()),
+                            SyntaxErr::OutsideMnemonic("register".to_string()),
                             loc.clone(),
                             group.clone(),
                             None,

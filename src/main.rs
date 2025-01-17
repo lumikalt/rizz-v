@@ -46,56 +46,54 @@ fn main() -> anyhow::Result<()> {
                     let token = token.clone();
 
                     match token.clone() {
-                        Token::Mnemonic(..) => {
-                            match env.assemble_op((token.clone(), loc.clone())) {
-                                Ok(op) => {
-                                    let mut formatted = format!(
-                                        "{:<1$} {3:02x}: {2:032b}",
-                                        lines[loc.line - 1],
-                                        size + 3,
-                                        op[0],
-                                        loc.mem_offset
-                                    );
-                                    ops.push(op[0]);
-                                    toks.push(token.clone());
+                        Token::Op(..) => match env.assemble_op((token.clone(), loc.clone())) {
+                            Ok(op) => {
+                                let mut formatted = format!(
+                                    "{:<1$} {3:02x}: {2:032b}",
+                                    lines[loc.line - 1],
+                                    size + 3,
+                                    op[0],
+                                    loc.mem_offset
+                                );
+                                ops.push(op[0]);
+                                toks.push(token.clone());
 
-                                    if op.len() > 1 {
-                                        for op in op[1..].iter() {
-                                            formatted += &format!(
-                                                "\n{:<1$} {3:02x}: {2:032b}",
-                                                "",
-                                                size + 3,
-                                                op,
-                                                loc.mem_offset
-                                            );
-                                            ops.push(*op);
-                                            toks.push(token.clone());
-                                        }
+                                if op.len() > 1 {
+                                    for op in op[1..].iter() {
+                                        formatted += &format!(
+                                            "\n{:<1$} {3:02x}: {2:032b}",
+                                            "",
+                                            size + 3,
+                                            op,
+                                            loc.mem_offset
+                                        );
+                                        ops.push(*op);
+                                        toks.push(token.clone());
                                     }
-                                    parse_asm_result += &format!("{}\n", formatted);
                                 }
-                                Err(err) => {
-                                    let diagnostic = Diagnostic::error()
-                                        .with_message("Engine Error")
-                                        .with_labels(vec![Label::primary(
-                                            (),
-                                            err.1.start..(err.1.end + 1),
-                                        )
-                                        .with_message(err.0.to_string())])
-                                        .with_notes({
-                                            let mut notes = Vec::new();
-                                            if let Some(note) = &err.2 {
-                                                notes.push(note.to_string());
-                                            }
-                                            notes.push(err.0.note());
-                                            notes
-                                        });
-
-                                    term::emit(&mut writer.lock(), &config, &file, &diagnostic)
-                                        .unwrap();
-                                }
+                                parse_asm_result += &format!("{}\n", formatted);
                             }
-                        }
+                            Err(err) => {
+                                let diagnostic = Diagnostic::error()
+                                    .with_message("Engine Error")
+                                    .with_labels(vec![Label::primary(
+                                        (),
+                                        err.1.start..(err.1.end + 1),
+                                    )
+                                    .with_message(err.0.to_string())])
+                                    .with_notes({
+                                        let mut notes = Vec::new();
+                                        if let Some(note) = &err.2 {
+                                            notes.push(note.to_string());
+                                        }
+                                        notes.push(err.0.note());
+                                        notes
+                                    });
+
+                                term::emit(&mut writer.lock(), &config, &file, &diagnostic)
+                                    .unwrap();
+                            }
+                        },
                         Token::Label(name) => {
                             parse_asm_result += &format!(
                                 "{:<1$}     <{2:02x}>\n",
@@ -182,11 +180,31 @@ fn main() -> anyhow::Result<()> {
                 })
                 .join("\n")
         );
-        let (right, tag) = if let Token::Mnemonic(op, args) = &toks[pc as usize >> 2] {
+        let (right, tag) = if let Token::Op(op, args) = &toks[pc as usize >> 2] {
             info(
                 &env,
                 &op,
-                args.iter().map(|(token, _)| token.to_string()).collect(),
+                args.iter()
+                    .map(|(token, _)| match token {
+                        Token::Register(reg) => reg.clone(),
+                        Token::Immediate(imm) => imm.to_string(),
+                        Token::Memory(imm, reg) => format!(
+                            "{}({})",
+                            match **imm {
+                                Token::Immediate(imm) => imm.to_string(),
+                                _ => "".to_string(),
+                            },
+                            match reg {
+                                Some(reg) => match **reg {
+                                    Token::Register(ref r) => r.clone(),
+                                    _ => unreachable!(),
+                                },
+                                _ => "".to_string(),
+                            }
+                        ),
+                        _ => unreachable!(),
+                    })
+                    .collect(),
                 display_mode,
             )
         } else {

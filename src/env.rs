@@ -168,7 +168,7 @@ impl Env {
                 i
             } else {
                 return Err((
-                    RuntimeErr::InvalidOp,
+                    RuntimeErr::InvalidMnemonic,
                     loc,
                     Some("no implementation exists".to_string()),
                 ));
@@ -207,7 +207,7 @@ impl Env {
                             }
                         }
                         _ => Err((
-                            RuntimeErr::InvalidType(Arg::from(args[k].0.clone()).kind(), v.kind()),
+                            RuntimeErr::TypeMissmatch(Arg::from(args[k].0.clone()).kind(), v.kind()),
                             args[k].1,
                             None,
                         )),
@@ -218,7 +218,7 @@ impl Env {
                             Ok(())
                         } else {
                             Err((
-                                RuntimeErr::InvalidType(
+                                RuntimeErr::TypeMissmatch(
                                     Arg::from(args[k].0.clone()).kind(),
                                     v.kind(),
                                 ),
@@ -248,7 +248,7 @@ impl Env {
                             Ok(())
                         } else {
                             Err((
-                                RuntimeErr::InvalidType(
+                                RuntimeErr::TypeMissmatch(
                                     Arg::from(args[k].0.clone()).kind(),
                                     v.kind(),
                                 ),
@@ -274,7 +274,7 @@ impl Env {
                             Ok(())
                         } else {
                             Err((
-                                RuntimeErr::InvalidType(
+                                RuntimeErr::TypeMissmatch(
                                     Arg::from(args[k].0.clone()).kind(),
                                     v.kind(),
                                 ),
@@ -342,7 +342,7 @@ impl Env {
                 (i, args.clone())
             } else {
                 return Err((
-                    RuntimeErr::InvalidOp,
+                    RuntimeErr::InvalidMnemonic,
                     loc,
                     Some("no implementation exists".to_string()),
                 ));
